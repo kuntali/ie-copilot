@@ -62,6 +62,14 @@ class Evidence(BaseModel):
     supports_target_claim: bool | None = None
 
 
+class EvidenceFailure(BaseModel):
+    challenge_id: str
+    round: int = Field(ge=1)
+    provider: str
+    error_type: str
+    message: str
+
+
 class RevisionDecision(BaseModel):
     position: str
     claims: list[Claim]
@@ -119,3 +127,4 @@ class FinalResult(BaseModel):
     evidence: list[Evidence]
     revisions: list[Revision]
     agent_failures: list[AgentFailure] = Field(default_factory=list)
+    evidence_failures: list[EvidenceFailure] = Field(default_factory=list)
