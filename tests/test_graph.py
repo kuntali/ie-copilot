@@ -3,10 +3,12 @@ from __future__ import annotations
 import pytest
 from conftest import (
     FailingCritiqueAgent,
+    FailingEvidenceProvider,
     FailingReviseAgent,
     FailingSolveAgent,
     HighQualityEvidenceProvider,
     ScriptedAgent,
+    SelectiveFailingEvidenceProvider,
     SlowSolveAgent,
 )
 
@@ -286,3 +288,78 @@ async def test_revise_failure_preserves_previous_proposal_without_revision() -> 
     assert len(failures) == 1
     assert failures[0].round == 1
     assert failures[0].error_type == "RuntimeError"
+
+
+@pytest.mark.asyncio
+async def test_partial_evidence_failure_preserves_successful_sibling_and_counts_attempts() -> None:
+    agents = [
+        ScriptedAgent(
+            "a",
+            "X",
+            challenge_severity=Severity.CRITICAL,
+            challenge_target_agent="c",
+            request_evidence=True,
+        ),
+        ScriptedAgent(
+            "b",
+            "X",
+            challenge_severity=Severity.CRITICAL,
+            challenge_target_agent="c",
+            request_evidence=True,
+        ),
+        ScriptedAgent("c", "Y", resolve_received=False),
+    ]
+    evidence = SelectiveFailingEvidenceProvider(fail_for_challenger="a")
+    graph = build_deliberation_graph(
+        agents,
+        evidence,
+        DeliberationConfig(agreement_threshold=1.0, max_rounds=2, max_tool_calls=2),
+    )
+
+    state = await graph.ainvoke({"question": "q"})
+    result = state["final_result"]
+
+    assert state["tool_calls"] == 2
+    assert evidence.calls == 2
+    assert len(result.evidence) == 1
+    assert result.evidence[0].source == "test-source"
+    assert len(result.evidence_failures) == 1
+    failure = result.evidence_failures[0]
+    assert failure.round == 1
+    assert failure.provider == "SelectiveFailingEvidenceProvider"
+    assert failure.error_type == "RuntimeError"
+    failed_challenge = next(
+        challenge for challenge in state["challenges"] if challenge.id == failure.challenge_id
+    )
+    assert failed_challenge.challenger_agent_id == "a"
+
+
+@pytest.mark.asyncio
+async def test_evidence_failure_at_exact_budget_stops_without_fake_evidence() -> None:
+    agents = [
+        ScriptedAgent(
+            "a",
+            "X",
+            challenge_severity=Severity.CRITICAL,
+            challenge_target_agent="c",
+            request_evidence=True,
+        ),
+        ScriptedAgent("b", "X"),
+        ScriptedAgent("c", "Y", resolve_received=False),
+    ]
+    evidence = FailingEvidenceProvider()
+    graph = build_deliberation_graph(
+        agents,
+        evidence,
+        DeliberationConfig(agreement_threshold=1.0, max_rounds=3, max_tool_calls=1),
+    )
+
+    state = await graph.ainvoke({"question": "q"})
+    result = state["final_result"]
+
+    assert state["tool_calls"] == 1
+    assert evidence.calls == 1
+    assert result.evidence == []
+    assert len(result.evidence_failures) == 1
+    assert result.consensus.reached is False
+    assert result.consensus.stop_reason == "max_tool_calls"
