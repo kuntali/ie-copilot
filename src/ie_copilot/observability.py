@@ -1,9 +1,10 @@
 from __future__ import annotations
 
 import os
+from collections.abc import Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass
-from typing import Any, Iterator
+from typing import Any
 
 from opentelemetry import trace
 
@@ -15,7 +16,7 @@ class PhoenixSettings:
     endpoint: str = "http://localhost:6006/v1/traces"
 
     @classmethod
-    def from_env(cls) -> "PhoenixSettings":
+    def from_env(cls) -> PhoenixSettings:
         return cls(
             enabled=os.getenv("PHOENIX_ENABLED", "false").lower() in {"1", "true", "yes"},
             project_name=os.getenv("PHOENIX_PROJECT_NAME", "ie-copilot"),
