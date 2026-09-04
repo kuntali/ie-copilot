@@ -100,6 +100,7 @@ class AgentFailure(BaseModel):
     error_type: str
     message: str
     timed_out: bool = False
+    failure_kind: Literal["runtime", "timeout", "structured_output"] = "runtime"
 
 
 class ConsensusResult(BaseModel):
