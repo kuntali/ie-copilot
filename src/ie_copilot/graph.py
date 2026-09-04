@@ -13,12 +13,24 @@ from pydantic import ValidationError
 from .models import (
     AgentFailure,
     Challenge,
+    ClaimCluster,
     ConsensusResult,
+    DebateItem,
     Evidence,
     EvidenceFailure,
+    EvidenceRelation,
     FinalResult,
+    PositionCluster,
+    PositionSnapshot,
     Proposal,
     Revision,
+    RevisionAction,
+)
+from .normalization import (
+    build_claim_clusters,
+    build_debate_queue,
+    build_position_clusters,
+    canonical_text,
 )
 from .observability import debate_span
 from .protocols import DebateAgent, EvidenceProvider
@@ -29,10 +41,14 @@ T = TypeVar("T")
 class DeliberationState(TypedDict, total=False):
     question: str
     proposals: dict[str, Proposal]
+    claim_clusters: list[ClaimCluster]
+    position_clusters: list[PositionCluster]
+    debate_queue: list[DebateItem]
     challenges: list[Challenge]
     evidence: list[Evidence]
     evidence_failures: list[EvidenceFailure]
     revisions: list[Revision]
+    position_snapshots: list[PositionSnapshot]
     agent_failures: list[AgentFailure]
     round: int
     tool_calls: int
@@ -51,7 +67,7 @@ class DeliberationConfig:
 
 
 def _canonical_position(position: str) -> str:
-    return " ".join(position.lower().split())
+    return canonical_text(position)
 
 
 def _position_stats(proposals: dict[str, Proposal]) -> tuple[str | None, float, float]:
@@ -99,6 +115,57 @@ def _evidence_sufficiency(
         item.challenge_id for item in evidence if item.quality >= threshold
     }
     return sum(1 for challenge in requested if challenge.id in good_by_challenge) / len(requested)
+
+
+def _assign_claim_ids(proposal: Proposal, round_number: int) -> Proposal:
+    claims = [
+        claim.model_copy(
+            update={"id": f"clm:{proposal.agent_id}:r{round_number}:{index}"}
+        )
+        for index, claim in enumerate(proposal.claims)
+    ]
+    return proposal.model_copy(update={"claims": claims})
+
+
+def _position_snapshot(
+    proposals: dict[str, Proposal], round_number: int
+) -> PositionSnapshot:
+    return PositionSnapshot(
+        round=round_number,
+        positions={agent_id: p.position for agent_id, p in sorted(proposals.items())},
+        confidences={
+            agent_id: p.confidence for agent_id, p in sorted(proposals.items())
+        },
+        claim_ids_by_agent={
+            agent_id: [claim.id for claim in p.claims]
+            for agent_id, p in sorted(proposals.items())
+        },
+    )
+
+
+def _protocol_views(
+    proposals: dict[str, Proposal], round_number: int
+) -> tuple[list[ClaimCluster], list[PositionCluster], list[DebateItem]]:
+    claim_clusters = build_claim_clusters(proposals)
+    position_clusters = build_position_clusters(proposals)
+    debate_queue = build_debate_queue(proposals, position_clusters, round_number)
+    return claim_clusters, position_clusters, debate_queue
+
+
+def _revision_action(
+    decision_action: RevisionAction | None,
+    previous_position: str,
+    previous_confidence: float,
+    new_position: str,
+    new_confidence: float,
+) -> RevisionAction:
+    if decision_action is not None:
+        return decision_action
+    if _canonical_position(previous_position) != _canonical_position(new_position):
+        return RevisionAction.REVISE
+    if new_confidence < previous_confidence:
+        return RevisionAction.WEAKEN
+    return RevisionAction.MAINTAIN
 
 
 class _Runtime:
@@ -182,6 +249,7 @@ class _Runtime:
                             "agent identity mismatch: "
                             f"invoked={agent.agent_id}, returned={proposal.agent_id}"
                         )
+                    proposal = _assign_claim_ids(proposal, 0)
                 return proposal, None
             except Exception as exc:
                 return None, self._agent_failure(
@@ -203,12 +271,17 @@ class _Runtime:
                 "at least two agents must complete initial solve; "
                 f"completed={len(proposals)}, required=2"
             )
+        claim_clusters, position_clusters, debate_queue = _protocol_views(proposals, 0)
         return {
             "proposals": proposals,
+            "claim_clusters": claim_clusters,
+            "position_clusters": position_clusters,
+            "debate_queue": debate_queue,
             "challenges": [],
             "evidence": [],
             "evidence_failures": [],
             "revisions": [],
+            "position_snapshots": [_position_snapshot(proposals, 0)],
             "agent_failures": failures,
             "round": 0,
             "tool_calls": 0,
@@ -222,6 +295,9 @@ class _Runtime:
             for agent_id in proposals
             if agent_id in self.agents_by_id
         ]
+        allowed_target_claim_ids = {
+            item.target_claim_id for item in state.get("debate_queue", [])
+        }
 
         async def run(agent: DebateAgent) -> tuple[list[Challenge], AgentFailure | None]:
             own = proposals[agent.agent_id]
@@ -246,19 +322,24 @@ class _Runtime:
                 for proposal in others
                 for claim in proposal.claims
             }
-            challenges = [
-                Challenge(
-                    challenger_agent_id=agent.agent_id,
-                    target_agent_id=claim_owner[draft.target_claim_id],
-                    round=round_number,
-                    target_claim_id=draft.target_claim_id,
-                    reason=draft.reason,
-                    evidence_request=draft.evidence_request,
-                    severity=draft.severity,
+            challenges = []
+            for index, draft in enumerate(drafts):
+                if draft.target_claim_id not in claim_owner:
+                    continue
+                if draft.target_claim_id not in allowed_target_claim_ids:
+                    continue
+                challenges.append(
+                    Challenge(
+                        id=f"chl:r{round_number}:{agent.agent_id}:{index}",
+                        challenger_agent_id=agent.agent_id,
+                        target_agent_id=claim_owner[draft.target_claim_id],
+                        round=round_number,
+                        target_claim_id=draft.target_claim_id,
+                        reason=draft.reason,
+                        evidence_request=draft.evidence_request,
+                        severity=draft.severity,
+                    )
                 )
-                for draft in drafts
-                if draft.target_claim_id in claim_owner
-            ]
             return challenges, None
 
         groups = await asyncio.gather(*(run(agent) for agent in active_agents))
@@ -293,6 +374,15 @@ class _Runtime:
                 ):
                     evidence = await self.evidence_provider.gather(
                         state["question"], challenge
+                    )
+                    relation = evidence.relation or EvidenceRelation.NEUTRAL
+                    evidence = evidence.model_copy(
+                        update={
+                            "id": f"ev:{challenge.id}",
+                            "challenge_id": challenge.id,
+                            "target_claim_id": challenge.target_claim_id,
+                            "relation": relation,
+                        }
                     )
                 return evidence, None
             except Exception as exc:
@@ -379,13 +469,29 @@ class _Runtime:
                 final_answer=decision.final_answer,
                 confidence=decision.confidence,
             )
+            revised = _assign_claim_ids(revised, round_number)
+            action = _revision_action(
+                decision.action,
+                proposal.position,
+                proposal.confidence,
+                revised.position,
+                revised.confidence,
+            )
+            trigger_ids = [challenge.id for challenge in received]
             revision = Revision(
+                id=f"rev:{agent.agent_id}:r{round_number}",
                 agent_id=agent.agent_id,
                 round=round_number,
+                action=action,
                 previous_position=proposal.position,
-                new_position=decision.position,
+                new_position=revised.position,
                 previous_confidence=proposal.confidence,
-                new_confidence=decision.confidence,
+                new_confidence=revised.confidence,
+                before_position=proposal.position,
+                after_position=revised.position,
+                before_claim_ids=[claim.id for claim in proposal.claims],
+                after_claim_ids=[claim.id for claim in revised.claims],
+                trigger_challenge_ids=trigger_ids,
                 reason=decision.reason,
                 evidence_refs=decision.evidence_refs,
                 resolved_challenge_ids=decision.resolved_challenge_ids,
@@ -396,9 +502,19 @@ class _Runtime:
         revised_proposals = {proposal.agent_id: proposal for proposal, _, _ in results}
         revisions = [revision for _, revision, _ in results if revision is not None]
         failures = [failure for _, _, failure in results if failure is not None]
+        claim_clusters, position_clusters, debate_queue = _protocol_views(
+            revised_proposals, round_number
+        )
+        snapshots = state.get("position_snapshots", []) + [
+            _position_snapshot(revised_proposals, round_number)
+        ]
         return {
             "proposals": revised_proposals,
+            "claim_clusters": claim_clusters,
+            "position_clusters": position_clusters,
+            "debate_queue": debate_queue,
             "revisions": state.get("revisions", []) + revisions,
+            "position_snapshots": snapshots,
             "agent_failures": state.get("agent_failures", []) + failures,
         }
 
@@ -415,10 +531,9 @@ class _Runtime:
         )
 
         unanimous = agreement == 1.0
-        distinct_positions = {
-            _canonical_position(p.position) for p in state["proposals"].values()
-        }
-        initial_conflict = state.get("round", 0) == 0 and len(distinct_positions) > 1
+        initial_conflict = state.get("round", 0) == 0 and len(
+            state.get("position_clusters", [])
+        ) > 1
         reached = (
             agreement >= self.config.agreement_threshold
             and sufficiency >= self.config.evidence_sufficiency_threshold
@@ -493,6 +608,10 @@ class _Runtime:
             rounds=state.get("round", 0),
             evidence=state.get("evidence", []),
             revisions=state.get("revisions", []),
+            claim_clusters=state.get("claim_clusters", []),
+            position_clusters=state.get("position_clusters", []),
+            debate_queue=state.get("debate_queue", []),
+            position_snapshots=state.get("position_snapshots", []),
             agent_failures=state.get("agent_failures", []),
             evidence_failures=state.get("evidence_failures", []),
         )
@@ -519,7 +638,9 @@ def build_deliberation_graph(
     builder.add_edge(START, "solve")
     builder.add_edge("solve", "assess")
 
-    def route_after_assess(state: DeliberationState) -> Literal["begin_round", "finalize"]:
+    def route_after_assess(
+        state: DeliberationState,
+    ) -> Literal["begin_round", "finalize"]:
         return "begin_round" if state["consensus"].stop_reason == "continue" else "finalize"
 
     builder.add_conditional_edges("assess", route_after_assess)
