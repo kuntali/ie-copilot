@@ -85,6 +85,15 @@ class Revision(BaseModel):
     resolved_challenge_ids: list[str] = Field(default_factory=list)
 
 
+class AgentFailure(BaseModel):
+    agent_id: str
+    phase: Literal["solve", "critique", "revise"]
+    round: int = Field(ge=0)
+    error_type: str
+    message: str
+    timed_out: bool = False
+
+
 class ConsensusResult(BaseModel):
     reached: bool
     dominant_position: str | None
@@ -109,3 +118,4 @@ class FinalResult(BaseModel):
     rounds: int
     evidence: list[Evidence]
     revisions: list[Revision]
+    agent_failures: list[AgentFailure] = Field(default_factory=list)
