@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import pytest
 from conftest import (
+    DuplicateClaimsOutputAgent,
     FailingCritiqueAgent,
     FailingEvidenceProvider,
     FailingReviseAgent,
@@ -201,6 +202,28 @@ async def test_structured_output_failure_is_classified_and_degraded() -> None:
         ScriptedAgent("a", "X"),
         ScriptedAgent("b", "X"),
         MalformedStructuredOutputAgent("c", "Y"),
+    ]
+    graph = build_deliberation_graph(agents, NullEvidenceProvider())
+
+    state = await graph.ainvoke({"question": "q"})
+    result = state["final_result"]
+
+    assert set(result.proposals) == {"a", "b"}
+    assert result.consensus.reached is True
+    assert len(result.agent_failures) == 1
+    failure = result.agent_failures[0]
+    assert failure.agent_id == "c"
+    assert failure.phase == "solve"
+    assert failure.error_type == "ValidationError"
+    assert failure.failure_kind == "structured_output"
+
+
+@pytest.mark.asyncio
+async def test_duplicate_claim_output_reuses_structured_output_degradation() -> None:
+    agents = [
+        ScriptedAgent("a", "X"),
+        ScriptedAgent("b", "X"),
+        DuplicateClaimsOutputAgent("c", "Y"),
     ]
     graph = build_deliberation_graph(agents, NullEvidenceProvider())
 
