@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from typing import Protocol, Sequence
+from collections.abc import Sequence
+from typing import Protocol
 
 from .models import Challenge, ChallengeDraft, Evidence, Proposal, RevisionDecision
 
