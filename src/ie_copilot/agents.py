@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import Sequence
 
 from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_openai import ChatOpenAI
@@ -64,7 +64,7 @@ class LLMDebateAgent:
         api_key: str,
         base_url: str | None = None,
         temperature: float = 0.1,
-    ) -> "LLMDebateAgent":
+    ) -> LLMDebateAgent:
         kwargs = {
             "model": model_name,
             "api_key": api_key,
@@ -118,9 +118,9 @@ class LLMDebateAgent:
                 SystemMessage(
                     content=(
                         "Identify only material disagreements or weak claims in other agents' "
-                        "proposals. Target an existing claim_id exactly. Ask for external evidence "
-                        "when a factual uncertainty could change the answer. Do not challenge merely "
-                        "for stylistic differences."
+                        "proposals. Target an existing claim_id exactly. Ask for external "
+                        "evidence when a factual uncertainty could change the answer. Do not "
+                        "challenge merely for stylistic differences."
                     )
                 ),
                 HumanMessage(content=json.dumps(payload, ensure_ascii=False)),
@@ -149,10 +149,10 @@ class LLMDebateAgent:
             [
                 SystemMessage(
                     content=(
-                        "Re-evaluate your position using the challenges and evidence. You may keep, "
-                        "weaken, revise, or abandon your position. Resolve a challenge only when the "
-                        "available evidence or reasoning actually addresses it. Never defend a prior "
-                        "answer merely for consistency."
+                        "Re-evaluate your position using the challenges and evidence. You may "
+                        "keep, weaken, revise, or abandon your position. Resolve a challenge "
+                        "only when the available evidence or reasoning actually addresses it. "
+                        "Never defend a prior answer merely for consistency."
                     )
                 ),
                 HumanMessage(content=json.dumps(payload, ensure_ascii=False)),
