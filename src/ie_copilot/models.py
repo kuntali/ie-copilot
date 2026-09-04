@@ -4,7 +4,7 @@ from enum import Enum
 from typing import Literal
 from uuid import uuid4
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 
 def new_id(prefix: str) -> str:
@@ -32,6 +32,19 @@ class Severity(str, Enum):
     CRITICAL = "critical"
 
 
+class EvidenceRelation(str, Enum):
+    SUPPORTS = "supports"
+    ATTACKS = "attacks"
+    NEUTRAL = "neutral"
+
+
+class RevisionAction(str, Enum):
+    MAINTAIN = "maintain"
+    WEAKEN = "weaken"
+    REVISE = "revise"
+    ABANDON = "abandon"
+
+
 class Claim(BaseModel):
     id: str = Field(default_factory=lambda: new_id("clm"))
     statement: str
@@ -44,6 +57,30 @@ class Claim(BaseModel):
         if not value.strip():
             raise ValueError("claim statement must not be blank")
         return value
+
+
+class ClaimCluster(BaseModel):
+    id: str
+    canonical_statement: str
+    claim_ids: list[str] = Field(min_length=1)
+    agent_ids: list[str] = Field(min_length=1)
+
+
+class PositionCluster(BaseModel):
+    id: str
+    canonical_position: str
+    representative_position: str
+    agent_ids: list[str] = Field(min_length=1)
+
+
+class DebateItem(BaseModel):
+    id: str
+    round: int = Field(ge=0)
+    target_claim_id: str
+    target_agent_id: str
+    target_position_cluster_id: str
+    opposing_position_cluster_ids: list[str] = Field(min_length=1)
+    priority: float = Field(default=1.0, ge=0.0, le=1.0)
 
 
 class Proposal(BaseModel):
@@ -82,10 +119,24 @@ class Challenge(BaseModel):
 class Evidence(BaseModel):
     id: str = Field(default_factory=lambda: new_id("ev"))
     challenge_id: str
+    target_claim_id: str | None = None
+    relation: EvidenceRelation | None = None
     source: str
     content: str
     quality: float = Field(ge=0.0, le=1.0)
     supports_target_claim: bool | None = None
+
+    @model_validator(mode="after")
+    def derive_relation_from_legacy_flag(self) -> Evidence:
+        if self.relation is not None:
+            return self
+        if self.supports_target_claim is True:
+            self.relation = EvidenceRelation.SUPPORTS
+        elif self.supports_target_claim is False:
+            self.relation = EvidenceRelation.ATTACKS
+        else:
+            self.relation = EvidenceRelation.NEUTRAL
+        return self
 
 
 class EvidenceFailure(BaseModel):
@@ -97,6 +148,7 @@ class EvidenceFailure(BaseModel):
 
 
 class RevisionDecision(BaseModel):
+    action: RevisionAction | None = None
     position: str
     claims: list[Claim] = Field(min_length=1)
     final_answer: str
@@ -114,14 +166,27 @@ class RevisionDecision(BaseModel):
 class Revision(BaseModel):
     id: str = Field(default_factory=lambda: new_id("rev"))
     agent_id: str
-    round: int
+    round: int = Field(ge=1)
+    action: RevisionAction = RevisionAction.MAINTAIN
     previous_position: str
     new_position: str
     previous_confidence: float
     new_confidence: float
+    before_position: str
+    after_position: str
+    before_claim_ids: list[str] = Field(default_factory=list)
+    after_claim_ids: list[str] = Field(default_factory=list)
+    trigger_challenge_ids: list[str] = Field(default_factory=list)
     reason: str
     evidence_refs: list[str] = Field(default_factory=list)
     resolved_challenge_ids: list[str] = Field(default_factory=list)
+
+
+class PositionSnapshot(BaseModel):
+    round: int = Field(ge=0)
+    positions: dict[str, str]
+    confidences: dict[str, float]
+    claim_ids_by_agent: dict[str, list[str]]
 
 
 class AgentFailure(BaseModel):
@@ -158,5 +223,9 @@ class FinalResult(BaseModel):
     rounds: int
     evidence: list[Evidence]
     revisions: list[Revision]
+    claim_clusters: list[ClaimCluster] = Field(default_factory=list)
+    position_clusters: list[PositionCluster] = Field(default_factory=list)
+    debate_queue: list[DebateItem] = Field(default_factory=list)
+    position_snapshots: list[PositionSnapshot] = Field(default_factory=list)
     agent_failures: list[AgentFailure] = Field(default_factory=list)
     evidence_failures: list[EvidenceFailure] = Field(default_factory=list)
