@@ -11,7 +11,6 @@ from .evidence import NullEvidenceProvider
 from .graph import DeliberationConfig, build_deliberation_graph
 from .observability import configure_phoenix
 
-
 OBJECTIVES = [
     "maximize factual correctness and make assumptions explicit",
     "actively falsify weak assumptions and search for counterexamples",
