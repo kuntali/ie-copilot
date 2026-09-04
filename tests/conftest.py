@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 from collections.abc import Sequence
 from dataclasses import dataclass, field
 
@@ -89,6 +90,21 @@ class ScriptedAgent:
             evidence_refs=evidence_refs,
             resolved_challenge_ids=resolved,
         )
+
+
+@dataclass
+class FailingSolveAgent(ScriptedAgent):
+    async def solve(self, question: str) -> Proposal:
+        raise RuntimeError(f"solve failed for {self.agent_id}")
+
+
+@dataclass
+class SlowSolveAgent(ScriptedAgent):
+    delay_seconds: float = 0.1
+
+    async def solve(self, question: str) -> Proposal:
+        await asyncio.sleep(self.delay_seconds)
+        return await super().solve(question)
 
 
 class HighQualityEvidenceProvider:
