@@ -177,6 +177,11 @@ class _Runtime:
                     **{"debate.agent.id": agent.agent_id, "debate.round": 0},
                 ):
                     proposal = await self._await_agent(agent.solve(state["question"]))
+                    if proposal.agent_id != agent.agent_id:
+                        raise RuntimeError(
+                            "agent identity mismatch: "
+                            f"invoked={agent.agent_id}, returned={proposal.agent_id}"
+                        )
                 return proposal, None
             except Exception as exc:
                 return None, self._agent_failure(
