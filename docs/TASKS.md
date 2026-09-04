@@ -2,7 +2,7 @@
 
 **Purpose:** single operational source of truth for task execution state.  
 **Workflow:** Superpowers. See `AGENTS.md`.  
-**Last updated:** 2026-09-04 17:29 +08:00
+**Last updated:** 2026-09-04 17:34 +08:00
 
 ## Status legend
 
@@ -17,7 +17,7 @@
 ## Current focus
 
 **Current phase:** Phase 1 — 建立可信工程基线  
-**Active task:** `P1-10`  
+**Active task:** `P1-11`  
 **Parallel execution:** disabled unless an implementation plan explicitly marks tasks independent.
 
 ## Phase 0 — 架构基线与 MVP 骨架
@@ -49,8 +49,8 @@
 | P1-07 | 补 Agent failure / timeout 降级测试 | DONE | 2026-09-04 17:10 +08:00 | Design/plan: `docs/plans/2026-09-04-P1-07-agent-failure-timeout-{design,plan}.md`. RED run #97 proved solve exception propagation, missing timeout and missing quorum error. Implemented structured `AgentFailure`, per-agent timeout, solve quorum degradation, critique/revise isolation. GREEN run #103 passed; review then added critique/revise regression tests only. Final run #107 (`33856828436`) passed Ruff + Tests on Python 3.10/3.13. |
 | P1-08 | 补 EvidenceProvider failure 测试 | DONE | 2026-09-04 17:15 +08:00 | Design/plan: `docs/plans/2026-09-04-P1-08-evidence-provider-failure-{design,plan}.md`. RED run #117 (`33857098240`) failed 2 new tests because provider exceptions propagated through `asyncio.gather` while 13 existing tests passed. Implemented `EvidenceFailure`, per-request isolation, successful sibling preservation and attempted-call budget accounting. GREEN run #121 (`33857287893`) passed Ruff + Tests on Python 3.10/3.13; task diff limited to `graph.py` and `models.py`. |
 | P1-09 | 补 structured-output parse failure 测试 | DONE | 2026-09-04 17:29 +08:00 | Design/plan: `docs/plans/2026-09-04-P1-09-structured-output-failure-{design,plan}.md`. RED run #131 (`33858336168`) produced exactly 3 failures because `AgentFailure.failure_kind` was absent; malformed Pydantic output was already isolated as a `ValidationError`. Added backward-compatible `failure_kind` and exception-chain classification for timeout, Pydantic `ValidationError`, and LangChain `OutputParserException`. GREEN run #135 (`33858498339`) passed Ruff + Tests on Python 3.10/3.13; review confirmed no retry/provider/prompt-routing expansion. |
-| P1-10 | 补空/重复 Claim 测试 | IN_PROGRESS | 2026-09-04 17:29 +08:00 | Start with claim validity/normalization semantics design, then deterministic RED tests before production changes. |
-| P1-11 | 补并发 Agent 结果隔离测试 | TODO | 2026-09-04 | TDD required |
+| P1-10 | 补空/重复 Claim 测试 | DONE | 2026-09-04 17:34 +08:00 | Design/plan: `docs/plans/2026-09-04-P1-10-claim-validity-{design,plan}.md`. RED run #147 (`33858783886`) showed 7 failures/16 passes because blank statements, empty claim lists and canonical duplicates were accepted. Added deterministic schema validators only: blank Claim rejected, Proposal/RevisionDecision require >=1 claim, canonical duplicate claims rejected without rewriting legal text. GREEN run #149 (`33858860698`) passed Ruff + Tests on Python 3.10/3.13; review confirmed no silent dedupe or semantic-normalization expansion. |
+| P1-11 | 补并发 Agent 结果隔离测试 | IN_PROGRESS | 2026-09-04 17:34 +08:00 | Start with concurrency/identity-isolation semantics design; verify out-of-order completion cannot cross-wire proposals and an Agent cannot spoof another Agent's proposal identity. |
 | P1-12 | 分离 unit / integration / e2e 测试标签 | TODO | 2026-09-04 | External service tests must not contaminate unit suite |
 | P1-GATE | Phase 1 gate: CI triggered + Ruff pass + unit pass + Python 3.10 pass | TODO | 2026-09-04 | Cannot start Phase 2 until gate is DONE |
 
