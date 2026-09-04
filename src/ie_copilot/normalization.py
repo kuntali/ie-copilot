@@ -63,6 +63,7 @@ def build_debate_queue(
     if len(position_clusters) <= 1:
         return []
 
+    next_round = round_number + 1
     cluster_by_agent = {
         agent_id: cluster.id
         for cluster in position_clusters
@@ -77,8 +78,8 @@ def build_debate_queue(
         for claim in proposal.claims:
             queue.append(
                 DebateItem(
-                    id=f"dbq:r{round_number}:{claim.id}",
-                    round=round_number,
+                    id=f"dbq:r{next_round}:{claim.id}",
+                    round=next_round,
                     target_claim_id=claim.id,
                     target_agent_id=agent_id,
                     target_position_cluster_id=target_cluster,
