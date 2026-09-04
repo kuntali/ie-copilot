@@ -19,6 +19,7 @@ from .models import (
     RevisionAction,
     RevisionDecision,
 )
+from .observability import debate_span
 from .prompts import (
     PROMPT_VERSION,
     critique_system_prompt,
@@ -110,7 +111,22 @@ class LLMDebateAgent:
         last_error: Exception | None = None
         for attempt in range(self.structured_output_retries + 1):
             try:
-                return await structured.ainvoke(messages)
+                with debate_span(
+                    "debate.llm.structured_output",
+                    **{
+                        "debate.agent.id": self.agent_id,
+                        "debate.mode": self.mode,
+                        "debate.model.name": self.model_name,
+                        "debate.model.temperature": self.temperature,
+                        "debate.prompt.version": self.prompt_version,
+                        "debate.structured_output.schema": schema.__name__,
+                        "debate.structured_output.attempt": attempt + 1,
+                        "debate.structured_output.max_attempts": (
+                            self.structured_output_retries + 1
+                        ),
+                    },
+                ):
+                    return await structured.ainvoke(messages)
             except (ValidationError, OutputParserException) as exc:
                 last_error = exc
                 if attempt >= self.structured_output_retries:
