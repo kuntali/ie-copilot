@@ -5,8 +5,12 @@ on:
     branches: [main, "feat/**"]
   pull_request:
 
+permissions:
+  contents: write
+
 jobs:
   lockfile:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/feat/multi-agent-deliberation-mvp'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -22,6 +26,17 @@ jobs:
         with:
           name: uv-lock
           path: uv.lock
+      - name: Commit lockfile
+        run: |
+          if git ls-files --error-unmatch uv.lock >/dev/null 2>&1 && git diff --quiet -- uv.lock; then
+            echo "uv.lock is already up to date"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add uv.lock
+          git commit -m "chore: add uv lockfile"
+          git push
 
   test:
     runs-on: ubuntu-latest
