@@ -4,11 +4,25 @@ from enum import Enum
 from typing import Literal
 from uuid import uuid4
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 
 def new_id(prefix: str) -> str:
     return f"{prefix}_{uuid4().hex[:12]}"
+
+
+def _canonical_claim_statement(statement: str) -> str:
+    return " ".join(statement.lower().split())
+
+
+def _validate_unique_claims(claims: list[Claim]) -> list[Claim]:
+    seen: set[str] = set()
+    for claim in claims:
+        key = _canonical_claim_statement(claim.statement)
+        if key in seen:
+            raise ValueError("claims must not contain canonical duplicates")
+        seen.add(key)
+    return claims
 
 
 class Severity(str, Enum):
@@ -24,15 +38,27 @@ class Claim(BaseModel):
     confidence: float = Field(ge=0.0, le=1.0)
     evidence_refs: list[str] = Field(default_factory=list)
 
+    @field_validator("statement")
+    @classmethod
+    def statement_must_not_be_blank(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("claim statement must not be blank")
+        return value
+
 
 class Proposal(BaseModel):
     agent_id: str
     position: str
-    claims: list[Claim]
+    claims: list[Claim] = Field(min_length=1)
     assumptions: list[str] = Field(default_factory=list)
     uncertainties: list[str] = Field(default_factory=list)
     final_answer: str
     confidence: float = Field(ge=0.0, le=1.0)
+
+    @field_validator("claims")
+    @classmethod
+    def claims_must_be_unique(cls, value: list[Claim]) -> list[Claim]:
+        return _validate_unique_claims(value)
 
 
 class ChallengeDraft(BaseModel):
@@ -72,12 +98,17 @@ class EvidenceFailure(BaseModel):
 
 class RevisionDecision(BaseModel):
     position: str
-    claims: list[Claim]
+    claims: list[Claim] = Field(min_length=1)
     final_answer: str
     confidence: float = Field(ge=0.0, le=1.0)
     reason: str
     evidence_refs: list[str] = Field(default_factory=list)
     resolved_challenge_ids: list[str] = Field(default_factory=list)
+
+    @field_validator("claims")
+    @classmethod
+    def claims_must_be_unique(cls, value: list[Claim]) -> list[Claim]:
+        return _validate_unique_claims(value)
 
 
 class Revision(BaseModel):
