@@ -2,6 +2,16 @@
 
 A LangGraph MVP for multi-agent deliberation where agents solve independently, challenge conflicting claims, gather evidence, revise positions, and stop only when the consensus policy is satisfied.
 
+## Start here
+
+Before changing the architecture or adding new agent behavior, read these documents in order:
+
+1. [`docs/design/multi-agent-deliberation-system-design-v1.0.md`](docs/design/multi-agent-deliberation-system-design-v1.0.md) — architecture baseline, rationale, lifecycle, consensus rules, boundaries, and ADR summary.
+2. [`docs/EXECUTION_PLAN.md`](docs/EXECUTION_PLAN.md) — phased implementation plan, current phase, acceptance gates, Definition of Done, and the handoff prompt for future coding agents.
+3. [`docs/observability.md`](docs/observability.md) — OpenTelemetry/OpenInference and `debate.*` observability conventions.
+
+The execution plan is the operational source of truth for **what to do next**; the design document is the source of truth for **why the system is shaped this way**.
+
 ## Why this design
 
 This project deliberately avoids a free-form "agents chatting until a majority agrees" loop. The runtime separates independent solving from debate and uses structured domain objects:
