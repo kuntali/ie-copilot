@@ -29,6 +29,7 @@ async def test_position_clusters_and_debate_queue_are_explicit_on_conflict() -> 
 
     assert len(state["position_clusters"]) == 2
     assert state["debate_queue"]
+    assert all(item.round == 1 for item in state["debate_queue"])
     assert {item.target_claim_id for item in state["debate_queue"]} <= {
         claim.id for p in state["proposals"].values() for claim in p.claims
     }
