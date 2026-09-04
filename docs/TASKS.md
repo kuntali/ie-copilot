@@ -33,7 +33,7 @@
 | P0-07 | Phoenix / OpenTelemetry / OpenInference 接入骨架 | DONE | 2026-09-04 | `docs/observability.md` + runtime instrumentation code committed |
 | P0-08 | 设计基线落盘 | DONE | 2026-09-04 | `docs/design/multi-agent-deliberation-system-design-v1.0.md`; docs-only, test N/A |
 | P0-09 | 分阶段执行计划落盘 | DONE | 2026-09-04 | `docs/EXECUTION_PLAN.md`; Superpowers/task-state rules linked; docs-only, test N/A |
-| P0-10 | 固化 Superpowers 工作流规范 | DONE | 2026-09-04 | `AGENTS.md` added; README + execution plan link to mandatory workflow; docs-only, test N/A |
+| P0-10 | 固化 Superpowers 工作流规范 | DONE | 2026-09-04 | `AGENTS.md`, README and `docs/plans/README.md` define mandatory workflow/plan convention; docs-only, test N/A |
 | P0-11 | 建立动态 Task 状态板 | DONE | 2026-09-04 | `docs/TASKS.md` established as live execution-state source; docs-only, test N/A |
 
 ## Phase 1 — 建立可信工程基线
