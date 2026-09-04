@@ -2,7 +2,7 @@
 
 **Purpose:** single operational source of truth for task execution state.  
 **Workflow:** Superpowers. See `AGENTS.md`.  
-**Last updated:** 2026-09-04 16:19 +08:00
+**Last updated:** 2026-09-04 16:23 +08:00
 
 ## Status legend
 
@@ -42,7 +42,7 @@
 |---|---|---|---|---|
 | P1-01 | 系统化调查 GitHub Actions 未产生 workflow run 的根因 | DONE | 2026-09-04 16:16 +08:00 | Root cause: premature observation of asynchronous Actions run creation/indexing, not workflow configuration. PR head `0cc56fb...` returned no run immediately after PR creation but now resolves to CI run #15 (`33851330838`, completed/failure). Workflow exists at correct path and matches `pull_request`; no speculative YAML fix made. |
 | P1-02 | 修复 CI 触发问题并验证 workflow run 实际产生 | DONE | 2026-09-04 16:19 +08:00 | No trigger fix required. CI run #43 (`33853451291`) executed matrix jobs; Python 3.10 and 3.13 both reached dependency installation successfully. Failure is at Ruff, proving workflow trigger/runner/dependency-install path works. |
-| P1-03 | 固化 `uv.lock` 与可重复依赖安装 | IN_PROGRESS | 2026-09-04 16:19 +08:00 | Start with Superpowers writing-plan; establish lockfile and frozen-install verification before lint/test fixes. |
+| P1-03 | 固化 `uv.lock` 与可重复依赖安装 | IN_PROGRESS | 2026-09-04 16:23 +08:00 | Plan: `docs/plans/2026-09-04-P1-03-uv-lock-plan.md`. `uv.lock` absent. Local resolver path blocked: environment cannot resolve `github.com`; do not fabricate lockfile. Proceeding with CI-generated resolver artifact per approved plan. |
 | P1-04 | Ruff 全绿 | TODO | 2026-09-04 | `ruff check .` evidence required |
 | P1-05 | Unit pytest 全绿且不依赖外部 API | TODO | 2026-09-04 | Python 3.10 required; 3.13 compatibility preferred |
 | P1-06 | 补 max_rounds / max_tool_calls 终止测试 | TODO | 2026-09-04 | TDD required |
