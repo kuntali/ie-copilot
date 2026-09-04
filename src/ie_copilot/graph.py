@@ -2,14 +2,25 @@ from __future__ import annotations
 
 import asyncio
 import math
+from collections.abc import Awaitable
 from dataclasses import dataclass
-from typing import Literal, TypedDict
+from typing import Literal, TypeVar, TypedDict
 
 from langgraph.graph import END, START, StateGraph
 
-from .models import Challenge, ConsensusResult, Evidence, FinalResult, Proposal, Revision
+from .models import (
+    AgentFailure,
+    Challenge,
+    ConsensusResult,
+    Evidence,
+    FinalResult,
+    Proposal,
+    Revision,
+)
 from .observability import debate_span
 from .protocols import DebateAgent, EvidenceProvider
+
+T = TypeVar("T")
 
 
 class DeliberationState(TypedDict, total=False):
@@ -18,6 +29,7 @@ class DeliberationState(TypedDict, total=False):
     challenges: list[Challenge]
     evidence: list[Evidence]
     revisions: list[Revision]
+    agent_failures: list[AgentFailure]
     round: int
     tool_calls: int
     consensus: ConsensusResult
@@ -31,6 +43,7 @@ class DeliberationConfig:
     evidence_sufficiency_threshold: float = 0.75
     max_rounds: int = 3
     max_tool_calls: int = 24
+    agent_timeout_seconds: float | None = 60.0
 
 
 def _canonical_position(position: str) -> str:
@@ -96,25 +109,75 @@ class _Runtime:
         agent_ids = [agent.agent_id for agent in agents]
         if len(set(agent_ids)) != len(agent_ids):
             raise ValueError("agent_id values must be unique")
+        if config.agent_timeout_seconds is not None and config.agent_timeout_seconds <= 0:
+            raise ValueError("agent_timeout_seconds must be positive or None")
         self.agents = agents
         self.agents_by_id = {agent.agent_id: agent for agent in agents}
         self.evidence_provider = evidence_provider
         self.config = config
 
-    async def solve(self, state: DeliberationState) -> dict:
-        async def run(agent: DebateAgent) -> Proposal:
-            with debate_span(
-                "debate.agent.solve",
-                **{"debate.agent.id": agent.agent_id, "debate.round": 0},
-            ):
-                return await agent.solve(state["question"])
+    async def _await_agent(self, awaitable: Awaitable[T]) -> T:
+        timeout = self.config.agent_timeout_seconds
+        if timeout is None:
+            return await awaitable
+        return await asyncio.wait_for(awaitable, timeout=timeout)
 
-        proposals = await asyncio.gather(*(run(agent) for agent in self.agents))
+    def _agent_failure(
+        self,
+        *,
+        agent_id: str,
+        phase: Literal["solve", "critique", "revise"],
+        round_number: int,
+        exc: Exception,
+    ) -> AgentFailure:
+        timed_out = isinstance(exc, asyncio.TimeoutError)
+        message = str(exc)
+        if timed_out and not message:
+            message = f"{phase} timed out after {self.config.agent_timeout_seconds} seconds"
+        return AgentFailure(
+            agent_id=agent_id,
+            phase=phase,
+            round=round_number,
+            error_type="TimeoutError" if timed_out else type(exc).__name__,
+            message=message,
+            timed_out=timed_out,
+        )
+
+    async def solve(self, state: DeliberationState) -> dict:
+        async def run(agent: DebateAgent) -> tuple[Proposal | None, AgentFailure | None]:
+            try:
+                with debate_span(
+                    "debate.agent.solve",
+                    **{"debate.agent.id": agent.agent_id, "debate.round": 0},
+                ):
+                    proposal = await self._await_agent(agent.solve(state["question"]))
+                return proposal, None
+            except Exception as exc:
+                return None, self._agent_failure(
+                    agent_id=agent.agent_id,
+                    phase="solve",
+                    round_number=0,
+                    exc=exc,
+                )
+
+        results = await asyncio.gather(*(run(agent) for agent in self.agents))
+        proposals = {
+            proposal.agent_id: proposal
+            for proposal, _ in results
+            if proposal is not None
+        }
+        failures = [failure for _, failure in results if failure is not None]
+        if len(proposals) < 2:
+            raise RuntimeError(
+                "at least two agents must complete initial solve; "
+                f"completed={len(proposals)}, required=2"
+            )
         return {
-            "proposals": {proposal.agent_id: proposal for proposal in proposals},
+            "proposals": proposals,
             "challenges": [],
             "evidence": [],
             "revisions": [],
+            "agent_failures": failures,
             "round": 0,
             "tool_calls": 0,
         }
@@ -122,23 +185,36 @@ class _Runtime:
     async def critique(self, state: DeliberationState) -> dict:
         round_number = state["round"]
         proposals = state["proposals"]
+        active_agents = [
+            self.agents_by_id[agent_id]
+            for agent_id in proposals
+            if agent_id in self.agents_by_id
+        ]
 
-        async def run(agent: DebateAgent) -> list[Challenge]:
+        async def run(agent: DebateAgent) -> tuple[list[Challenge], AgentFailure | None]:
             own = proposals[agent.agent_id]
             others = [p for aid, p in proposals.items() if aid != agent.agent_id]
-            with debate_span(
-                "debate.agent.critique",
-                **{"debate.agent.id": agent.agent_id, "debate.round": round_number},
-            ):
-                drafts = await agent.critique(
-                    state["question"], own, others, round_number
+            try:
+                with debate_span(
+                    "debate.agent.critique",
+                    **{"debate.agent.id": agent.agent_id, "debate.round": round_number},
+                ):
+                    drafts = await self._await_agent(
+                        agent.critique(state["question"], own, others, round_number)
+                    )
+            except Exception as exc:
+                return [], self._agent_failure(
+                    agent_id=agent.agent_id,
+                    phase="critique",
+                    round_number=round_number,
+                    exc=exc,
                 )
             claim_owner = {
                 claim.id: proposal.agent_id
                 for proposal in others
                 for claim in proposal.claims
             }
-            return [
+            challenges = [
                 Challenge(
                     challenger_agent_id=agent.agent_id,
                     target_agent_id=claim_owner[draft.target_claim_id],
@@ -151,10 +227,15 @@ class _Runtime:
                 for draft in drafts
                 if draft.target_claim_id in claim_owner
             ]
+            return challenges, None
 
-        challenge_groups = await asyncio.gather(*(run(agent) for agent in self.agents))
-        current = [challenge for group in challenge_groups for challenge in group]
-        return {"challenges": state.get("challenges", []) + current}
+        groups = await asyncio.gather(*(run(agent) for agent in active_agents))
+        current = [challenge for group, _ in groups for challenge in group]
+        failures = [failure for _, failure in groups if failure is not None]
+        return {
+            "challenges": state.get("challenges", []) + current,
+            "agent_failures": state.get("agent_failures", []) + failures,
+        }
 
     async def gather_evidence(self, state: DeliberationState) -> dict:
         round_number = state["round"]
@@ -186,6 +267,11 @@ class _Runtime:
     async def revise(self, state: DeliberationState) -> dict:
         round_number = state["round"]
         proposals = state["proposals"]
+        active_agents = [
+            self.agents_by_id[agent_id]
+            for agent_id in proposals
+            if agent_id in self.agents_by_id
+        ]
         current_challenges = [
             challenge
             for challenge in state.get("challenges", [])
@@ -195,7 +281,9 @@ class _Runtime:
             item.challenge_id: item for item in state.get("evidence", [])
         }
 
-        async def run(agent: DebateAgent) -> tuple[Proposal, Revision]:
+        async def run(
+            agent: DebateAgent,
+        ) -> tuple[Proposal, Revision | None, AgentFailure | None]:
             proposal = proposals[agent.agent_id]
             received = [
                 challenge
@@ -207,21 +295,31 @@ class _Runtime:
                 for challenge in received
                 if challenge.id in evidence_by_challenge
             ]
-            with debate_span(
-                "debate.agent.revise",
-                **{"debate.agent.id": agent.agent_id, "debate.round": round_number},
-            ) as span:
-                decision = await agent.revise(
-                    state["question"],
-                    proposal,
-                    received,
-                    related_evidence,
-                    round_number,
+            try:
+                with debate_span(
+                    "debate.agent.revise",
+                    **{"debate.agent.id": agent.agent_id, "debate.round": round_number},
+                ) as span:
+                    decision = await self._await_agent(
+                        agent.revise(
+                            state["question"],
+                            proposal,
+                            received,
+                            related_evidence,
+                            round_number,
+                        )
+                    )
+                    span.set_attribute("debate.revision.from", proposal.position)
+                    span.set_attribute("debate.revision.to", decision.position)
+                    span.set_attribute("debate.confidence.before", proposal.confidence)
+                    span.set_attribute("debate.confidence.after", decision.confidence)
+            except Exception as exc:
+                return proposal, None, self._agent_failure(
+                    agent_id=agent.agent_id,
+                    phase="revise",
+                    round_number=round_number,
+                    exc=exc,
                 )
-                span.set_attribute("debate.revision.from", proposal.position)
-                span.set_attribute("debate.revision.to", decision.position)
-                span.set_attribute("debate.confidence.before", proposal.confidence)
-                span.set_attribute("debate.confidence.after", decision.confidence)
 
             revised = Proposal(
                 agent_id=agent.agent_id,
@@ -243,14 +341,16 @@ class _Runtime:
                 evidence_refs=decision.evidence_refs,
                 resolved_challenge_ids=decision.resolved_challenge_ids,
             )
-            return revised, revision
+            return revised, revision, None
 
-        results = await asyncio.gather(*(run(agent) for agent in self.agents))
-        revised_proposals = {proposal.agent_id: proposal for proposal, _ in results}
-        revisions = [revision for _, revision in results]
+        results = await asyncio.gather(*(run(agent) for agent in active_agents))
+        revised_proposals = {proposal.agent_id: proposal for proposal, _, _ in results}
+        revisions = [revision for _, revision, _ in results if revision is not None]
+        failures = [failure for _, _, failure in results if failure is not None]
         return {
             "proposals": revised_proposals,
             "revisions": state.get("revisions", []) + revisions,
+            "agent_failures": state.get("agent_failures", []) + failures,
         }
 
     async def assess(self, state: DeliberationState) -> dict:
@@ -344,6 +444,7 @@ class _Runtime:
             rounds=state.get("round", 0),
             evidence=state.get("evidence", []),
             revisions=state.get("revisions", []),
+            agent_failures=state.get("agent_failures", []),
         )
         return {"final_result": final}
 
