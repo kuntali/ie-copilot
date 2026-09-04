@@ -2,7 +2,7 @@
 
 **Purpose:** single operational source of truth for task execution state.  
 **Workflow:** Superpowers. See `AGENTS.md`.  
-**Last updated:** 2026-09-04 16:50 +08:00
+**Last updated:** 2026-09-04 17:10 +08:00
 
 ## Status legend
 
@@ -17,7 +17,7 @@
 ## Current focus
 
 **Current phase:** Phase 1 — 建立可信工程基线  
-**Active task:** `P1-07`  
+**Active task:** `P1-08`  
 **Parallel execution:** disabled unless an implementation plan explicitly marks tasks independent.
 
 ## Phase 0 — 架构基线与 MVP 骨架
@@ -46,8 +46,8 @@
 | P1-04 | Ruff 全绿 | DONE | 2026-09-04 16:43 +08:00 | Plan: `docs/plans/2026-09-04-P1-04-ruff-plan.md`. Run #77 (`33854605030`) completed success; Ruff step passed on Python 3.10 and 3.13. Scoped runner autofix commit `d2ab6810...` changed only one extra blank line in `src/ie_copilot/cli.py`; temporary write/autofix CI removed before final verification. |
 | P1-05 | Unit pytest 全绿且不依赖外部 API | DONE | 2026-09-04 16:46 +08:00 | Plan: `docs/plans/2026-09-04-P1-05-unit-tests-plan.md`. Unit inventory is `tests/conftest.py`, `test_graph.py`, `test_models.py`; deterministic ScriptedAgent/Null or fake evidence only, no external API/service dependency. Fresh run #81 (`33854716279`) completed success with Tests success on Python 3.10 and 3.13. |
 | P1-06 | 补 max_rounds / max_tool_calls 终止测试 | DONE | 2026-09-04 16:50 +08:00 | Plan: `docs/plans/2026-09-04-P1-06-termination-budget-tests-plan.md`. Added exact-boundary max_rounds and same-round max_tool_calls cap tests only; no production change needed because existing behavior satisfied spec. Run #87 (`33854887371`) completed success on Python 3.10/3.13. |
-| P1-07 | 补 Agent failure / timeout 降级测试 | IN_PROGRESS | 2026-09-04 16:50 +08:00 | Behavior change task: brainstorm/plan graceful-degradation semantics, then RED tests before implementation. |
-| P1-08 | 补 EvidenceProvider failure 测试 | TODO | 2026-09-04 | TDD required |
+| P1-07 | 补 Agent failure / timeout 降级测试 | DONE | 2026-09-04 17:10 +08:00 | Design/plan: `docs/plans/2026-09-04-P1-07-agent-failure-timeout-{design,plan}.md`. RED run #97 proved solve exception propagation, missing timeout and missing quorum error. Implemented structured `AgentFailure`, per-agent timeout, solve quorum degradation, critique/revise isolation. GREEN run #103 passed; review then added critique/revise regression tests only. Final run #107 (`33856828436`) passed Ruff + Tests on Python 3.10/3.13. |
+| P1-08 | 补 EvidenceProvider failure 测试 | IN_PROGRESS | 2026-09-04 17:10 +08:00 | Start with failure semantics design + RED tests. Do not silently fabricate Evidence; failed attempts must remain observable and budget semantics must be explicit. |
 | P1-09 | 补 structured-output parse failure 测试 | TODO | 2026-09-04 | TDD required |
 | P1-10 | 补空/重复 Claim 测试 | TODO | 2026-09-04 | TDD required |
 | P1-11 | 补并发 Agent 结果隔离测试 | TODO | 2026-09-04 | TDD required |
