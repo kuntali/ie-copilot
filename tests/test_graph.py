@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import pytest
 from conftest import (
+    FailingCritiqueAgent,
+    FailingReviseAgent,
     FailingSolveAgent,
     HighQualityEvidenceProvider,
     ScriptedAgent,
@@ -226,3 +228,61 @@ async def test_initial_solve_requires_two_successful_agents() -> None:
 
     with pytest.raises(RuntimeError, match="at least two agents must complete initial solve"):
         await graph.ainvoke({"question": "q"})
+
+
+@pytest.mark.asyncio
+async def test_critique_failure_records_failure_without_fabricating_challenge() -> None:
+    agents = [
+        ScriptedAgent("a", "X"),
+        ScriptedAgent("b", "X"),
+        FailingCritiqueAgent("c", "Y", revised_position="X"),
+    ]
+    graph = build_deliberation_graph(
+        agents,
+        NullEvidenceProvider(),
+        DeliberationConfig(agreement_threshold=0.60, max_rounds=1),
+    )
+
+    state = await graph.ainvoke({"question": "q"})
+    result = state["final_result"]
+
+    assert result.consensus.reached is True
+    assert result.proposals["c"].position == "X"
+    assert all(challenge.challenger_agent_id != "c" for challenge in state["challenges"])
+    failures = [
+        failure
+        for failure in result.agent_failures
+        if failure.agent_id == "c" and failure.phase == "critique"
+    ]
+    assert len(failures) == 1
+    assert failures[0].round == 1
+    assert failures[0].error_type == "RuntimeError"
+
+
+@pytest.mark.asyncio
+async def test_revise_failure_preserves_previous_proposal_without_revision() -> None:
+    agents = [
+        ScriptedAgent("a", "X"),
+        ScriptedAgent("b", "X"),
+        FailingReviseAgent("c", "Y"),
+    ]
+    graph = build_deliberation_graph(
+        agents,
+        NullEvidenceProvider(),
+        DeliberationConfig(agreement_threshold=0.60, max_rounds=1),
+    )
+
+    state = await graph.ainvoke({"question": "q"})
+    result = state["final_result"]
+
+    assert result.consensus.reached is True
+    assert result.proposals["c"].position == "Y"
+    assert all(revision.agent_id != "c" for revision in result.revisions)
+    failures = [
+        failure
+        for failure in result.agent_failures
+        if failure.agent_id == "c" and failure.phase == "revise"
+    ]
+    assert len(failures) == 1
+    assert failures[0].round == 1
+    assert failures[0].error_type == "RuntimeError"
