@@ -7,6 +7,33 @@
 
 > **核心原则：** 先证明“流程正确、可测试、可观测”，再接真实模型和真实检索；先建立可重复评估，再优化提示词和多 Agent 策略。
 
+> **执行方法：** 后续实现必须遵循仓库根目录 `AGENTS.md` 中定义的 Superpowers 工作流。`docs/TASKS.md` 是唯一实时任务状态源；本文件负责阶段目标与 Gate，不再承担实时进度记录。
+
+### Superpowers 执行约束
+
+后续非平凡开发统一遵循：
+
+```text
+brainstorming（需求/设计变化时）
+  → using-git-worktrees / isolated feature branch
+  → writing-plans
+  → executing-plans / subagent-driven-development
+  → test-driven-development (RED → GREEN → REFACTOR)
+  → requesting-code-review
+  → verification-before-completion
+  → finishing-a-development-branch
+```
+
+遇到测试、CI、构建、集成或运行异常时，必须先进入 `systematic-debugging`，完成根因调查后再修改。不得通过猜测式连续 patch 解决问题。
+
+动态任务规则：
+
+- 开始执行前：`docs/TASKS.md` 将对应任务标记为 `IN_PROGRESS`；
+- 验证失败：保持 `IN_PROGRESS` 或标记 `BLOCKED`，并记录根因调查证据；
+- 验证通过：附上测试/CI/commit 等证据后才能标记 `DONE`；
+- 每次改变仓库状态的工作结束时，Task Board 必须与真实状态一致；
+- 当前 Phase Gate 未完成前，不进入下一阶段，除非计划明确允许独立并行任务。
+
 ---
 
 ## 1. 项目目标
@@ -404,136 +431,222 @@ Agent 因 Challenge/Evidence 修改立场，并且修改后的立场更接近正
 
 ### Gate
 
-完成 staging 环境持续运行、故障注入和审计检查后，再考虑正式生产使用。
+形成可部署、可恢复、可审计、权限受控的企业运行版本。
 
 ---
 
-# 5. 每次开发的标准工作流
+# 5. 开发执行规则
 
-后续无论由人、Codex 或其他 Agent 执行，都遵循以下顺序：
+## 5.1 每次只推进一个 Gate
 
-1. 阅读 `docs/design/multi-agent-deliberation-system-design-v1.0.md`；
-2. 阅读本文件，确认当前 Phase；
-3. 不跨 Phase 大量提前实现未来功能；
-4. 明确本次任务对应的 acceptance criteria；
-5. 先添加/修改测试，再完成实现；
-6. 本地执行最小测试集；
-7. 执行完整 unit suite；
-8. 执行 lint/type checks；
-9. 检查 Observability 是否因改动丢失关键语义；
-10. 更新本计划中的状态；
-11. 通过 PR 合并，不直接在 main 上进行大规模试验。
+开发不是：
+
+```text
+想到功能 → 直接实现
+```
+
+而是：
+
+```text
+选择当前 Phase
+→ 明确当前 Gate
+→ 写/补测试
+→ 最小实现
+→ 验证
+→ 更新文档
+→ 进入下一 Gate
+```
+
+## 5.2 不因为真实 LLM 不稳定降低单元测试要求
+
+核心状态机必须通过 Fake/Deterministic Agent 测试。
+
+真实模型测试的作用是 Integration Validation，而不是替代 unit tests。
+
+## 5.3 新功能需要回答四个问题
+
+每增加一个功能，PR 必须说明：
+
+1. 它解决什么失败模式？
+2. 它改变哪个 state / protocol？
+3. 如何测试？
+4. 哪个指标可以验证它真的有价值？
+
+回答不了，不进入实现。
+
+## 5.4 不允许隐式 Agent 通信
+
+Agent 之间交换的信息必须落入结构化协议，不能靠共享长对话历史隐式传播。
 
 ---
 
 # 6. Definition of Done
 
-单个功能只有同时满足以下条件才算完成：
-
-- 行为与设计文档一致；
-- 有自动化测试覆盖主路径；
-- 有至少一个失败/边界测试；
-- 不依赖真实网络即可运行 unit test；
-- CI 通过；
-- 新增关键 Agent 行为有可观测字段；
-- 没有绕过预算和 Consensus Policy；
-- 文档/配置发生变化时同步更新；
-- 不把 Chain-of-Thought 当成观测或审计依赖。
-
----
-
-# 7. 架构变更规则
-
-以下改动不应“顺手修改”，而应形成 Architecture Decision Record 或至少更新设计基线：
-
-- 改变 Agent 之间通信协议；
-- 改变 consensus/stop semantics；
-- 引入新的 Judge 权限；
-- 从 conflict-driven 改为全连接 debate；
-- Evidence 的可信度/裁决机制变化；
-- 替换 OpenTelemetry/OpenInference 可观测标准层；
-- 将外部 Evidence 与模型生成内容混合；
-- 引入长期 Agent reputation；
-- 引入主动学习或跨 Run 自动更新策略。
-
----
-
-# 8. 当前下一步任务队列
-
-按执行顺序：
-
-### P0-1：CI 恢复
-
-- 找到 Actions 未触发原因；
-- Python 3.10 pytest + ruff 绿灯；
-- 固化 lockfile。
-
-### P0-2：协议测试增强
-
-- fake/deterministic agents；
-- round/tool budget；
-- failure/timeout；
-- parallel state safety。
-
-### P0-3：Conflict/Claim 规范化
-
-- claim identity；
-- position clustering；
-- debate queue。
-
-### P1-1：真实模型 E2E
-
-- OpenAI-compatible endpoint；
-- structured outputs；
-- retry budget。
-
-### P1-2：真实 EvidenceProvider
-
-- 完成一次 evidence-driven revision E2E。
-
-### P1-3：Phoenix Trace E2E
-
-- 能按 run_id 重建完整审议链路。
-
-### P1-4：Benchmark
-
-- 5 个 baseline；
-- False Consensus Rate；
-- Useful Revision Rate。
-
----
-
-# 9. 给后续 Agent 的最小引导 Prompt
-
-当需要后续编码 Agent 接手本项目时，可使用下面的最小引导：
+一个功能只有满足以下条件才算完成：
 
 ```text
-你正在维护 kuntali/ie-copilot。
+[ ] code implemented
+[ ] unit tests added/updated
+[ ] tests passing
+[ ] lint passing
+[ ] no hidden external network dependency in unit tests
+[ ] observability semantics updated if needed
+[ ] README/docs updated if behavior changed
+[ ] failure path tested
+[ ] budget/termination impact considered
+[ ] PR description explains design impact
+```
 
-开始任何实现前：
-1. 阅读 docs/design/multi-agent-deliberation-system-design-v1.0.md；
-2. 阅读 docs/EXECUTION_PLAN.md；
-3. 确认当前 Phase 和 acceptance criteria；
-4. 不绕过 Claim/Challenge/Evidence/Revision/Consensus 领域协议；
-5. 不将多数票作为唯一终止条件；
-6. 保持 OpenTelemetry/OpenInference 为可观测标准层；
-7. 新功能必须有自动化测试，并确保无真实外部 API 时 unit tests 可运行；
-8. 完成后更新 docs/EXECUTION_PLAN.md 的状态和下一步。
+涉及多 Agent 行为的功能还必须检查：
 
-如果实现方案与设计基线冲突，先明确指出冲突及理由，不要静默改变架构。
+```text
+[ ] does not introduce free-form all-to-all debate
+[ ] does not treat majority as truth
+[ ] does not create unbounded loops
+[ ] does not silently discard minority/critical objections
+[ ] evidence provenance remains traceable
 ```
 
 ---
 
-# 10. 成功标准
+# 7. 推荐分支策略
 
-第一阶段研究型 MVP 可以认为成功，需要同时达到：
+```text
+main
+  │
+  ├── feat/multi-agent-deliberation-mvp   # 当前基线 PR
+  │
+  ├── feat/claim-conflict-engine
+  ├── feat/evidence-retrieval
+  ├── feat/phoenix-e2e
+  ├── feat/benchmark-suite
+  └── feat/production-runtime
+```
 
-1. 系统能在真实问题上完成完整审议闭环；
-2. Agent 会因真实外部证据发生可解释 Revision；
-3. 关键异议能阻止错误的早期多数共识；
-4. 每次 Run 可在 Phoenix 中完整追踪；
-5. 相较 Single Agent / Majority Vote，在 benchmark 上显著降低 False Consensus，或提升正确率；
-6. 增加的质量收益能够用 token / latency / tool-call 成本解释。
+不要让一个 PR 同时实现 Phase 2～5。
 
-在达到这些目标之前，本项目的重点始终是：**证明机制有效，而不是增加 Agent 数量或复杂度。**
+推荐：
+
+> **一个 PR 对应一个明确 Gate 或一个紧密相关的小能力集。**
+
+---
+
+# 8. 下一次继续开发时的起手动作
+
+任何 Agent/开发者继续当前项目时，第一步不是写代码，而是：
+
+```text
+1. 读取 docs/design/multi-agent-deliberation-system-design-v1.0.md
+2. 读取 docs/EXECUTION_PLAN.md
+3. 检查当前分支与 PR 状态
+4. 检查 CI / tests
+5. 找到当前尚未通过的最近 Gate
+6. 只解决这个 Gate
+```
+
+当前最近 Gate 是：
+
+> **Phase 1 / CI engineering baseline**
+
+当前第一任务：
+
+> **查明 `.github/workflows/ci.yml` 为什么未产生 GitHub Actions workflow run，并使 Python 3.10 CI 真正运行。**
+
+在这个问题解决前，不建议继续实现新的 Agent 能力。
+
+---
+
+# 9. 后续 Agent 最小引导 Prompt
+
+可以直接将下面内容交给后续 Codex/Agent：
+
+```text
+你正在继续开发 kuntali/ie-copilot。
+
+在做任何修改前：
+1. 阅读 docs/design/multi-agent-deliberation-system-design-v1.0.md；
+2. 阅读 docs/EXECUTION_PLAN.md；
+3. 阅读 docs/observability.md；
+4. 检查当前 branch / PR / CI / tests 状态；
+5. 明确当前 Phase 和尚未通过的 Gate。
+
+不要跳过 Phase Gate，不要同时实现多个后续阶段。
+核心设计约束：
+- Agent 独立求解后才允许看到其他 Agent 结构化观点；
+- 交互以 Claim / Challenge / Evidence / Rebuttal / Revision 为单位；
+- 只针对冲突 Claim 辩论；
+- Majority 不是 Truth；
+- critical objection 未解决不能正常结束；
+- 必须有 round/tool/token/time budget；
+- 外部 Evidence 必须有 provenance；
+- 不记录隐藏 chain-of-thought；
+- OpenTelemetry/OpenInference 是 instrumentation contract，Phoenix 是 backend；
+- 所有核心 Graph 行为必须可用 Fake Agent 确定性测试。
+
+当前优先执行 docs/EXECUTION_PLAN.md 中最靠前且 Gate 未完成的任务。
+完成后更新计划状态和测试证据。
+```
+
+---
+
+# 10. 最终目标形态
+
+项目成熟后应形成：
+
+```text
+Question
+   │
+   ▼
+Independent Solvers
+   │
+   ▼
+Claim Normalization / Clustering
+   │
+   ▼
+Conflict Detector
+   │
+   ▼
+Debate Queue
+   │
+   ▼
+Challenge
+   │
+   ▼
+Evidence Gap Detection
+   │
+   ├──► RAG / Search / DB / Code
+   │
+   ▼
+Evidence Validation
+   │
+   ▼
+Belief / Position Revision
+   │
+   ▼
+Consensus Policy
+   │
+   ├── continue
+   │
+   └── finish
+          │
+          ▼
+Answer + Evidence + Minority Report + Trace
+```
+
+同时：
+
+```text
+Runtime
+  ↓
+OpenInference / OpenTelemetry
+  ↓
+Phoenix
+  ↓
+Evaluation / Benchmark
+  ↓
+Policy Optimization
+```
+
+最终验证的核心研究问题不是“多个 Agent 能不能聊天”，而是：
+
+> **冲突驱动的结构化审议 + 主动取证 + 允许立场修正 + 复合共识终止，是否能够以可接受的计算成本，显著降低错误答案和错误共识。**
