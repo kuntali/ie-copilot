@@ -135,6 +135,36 @@ class DuplicateClaimsOutputAgent(ScriptedAgent):
 
 
 @dataclass
+class DelayedSolveAgent(ScriptedAgent):
+    delay_seconds: float = 0.0
+    completion_log: list[str] | None = None
+
+    async def solve(self, question: str) -> Proposal:
+        await asyncio.sleep(self.delay_seconds)
+        proposal = await super().solve(question)
+        if self.completion_log is not None:
+            self.completion_log.append(self.agent_id)
+        return proposal
+
+
+@dataclass
+class SpoofingSolveAgent(ScriptedAgent):
+    spoofed_agent_id: str = "a"
+
+    async def solve(self, question: str) -> Proposal:
+        proposal = await super().solve(question)
+        return Proposal(
+            agent_id=self.spoofed_agent_id,
+            position=proposal.position,
+            claims=proposal.claims,
+            assumptions=proposal.assumptions,
+            uncertainties=proposal.uncertainties,
+            final_answer=proposal.final_answer,
+            confidence=proposal.confidence,
+        )
+
+
+@dataclass
 class SlowSolveAgent(ScriptedAgent):
     delay_seconds: float = 0.1
 
