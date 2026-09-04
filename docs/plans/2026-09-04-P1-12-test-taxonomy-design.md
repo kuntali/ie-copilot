@@ -104,13 +104,15 @@ e2e
 
 启用 `--strict-markers`，拼错/未注册 marker 立即失败。
 
-当前 unit test modules 使用 module-level：
+分类身份由**目录路径**决定，而不是依赖每个测试作者手写 decorator。根 `tests/conftest.py` 在 collection 阶段根据路径自动附加 marker：
 
-```python
-pytestmark = pytest.mark.unit
+```text
+tests/unit/**        -> unit
+tests/integration/** -> integration
+tests/e2e/**         -> e2e
 ```
 
-未来 integration/e2e 同理。
+这样目录是单一分类真源，同时 pytest marker 仍然可供 `-m` 查询和 CI 使用。根 conftest 必须是唯一共享 conftest，避免子目录 `conftest.py` 遮蔽现有 fixture module import。
 
 ## Commands
 
@@ -130,7 +132,7 @@ pytest tests/e2e -m e2e
 
 ## Shared fixtures
 
-`tests/conftest.py` 保留在 `tests/` 根目录，供三个层级继承。Fixture 本身不得在 import/collection 阶段启动网络或外部服务。
+`tests/conftest.py` 保留在 `tests/` 根目录，供三个层级继承，并负责目录到 marker 的映射。Fixture 本身不得在 import/collection 阶段启动网络或外部服务。
 
 ## Non-goals
 
