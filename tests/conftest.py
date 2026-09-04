@@ -99,6 +99,25 @@ class FailingSolveAgent(ScriptedAgent):
 
 
 @dataclass
+class MalformedStructuredOutputAgent(ScriptedAgent):
+    async def solve(self, question: str) -> Proposal:
+        return Proposal.model_validate(
+            {
+                "agent_id": self.agent_id,
+                "position": self.initial_position,
+                "claims": [
+                    {
+                        "statement": f"{self.agent_id} malformed claim",
+                        "confidence": 1.5,
+                    }
+                ],
+                "final_answer": f"answer:{self.initial_position}",
+                "confidence": 1.5,
+            }
+        )
+
+
+@dataclass
 class SlowSolveAgent(ScriptedAgent):
     delay_seconds: float = 0.1
 
