@@ -13,6 +13,7 @@ from .models import (
     Challenge,
     ConsensusResult,
     Evidence,
+    EvidenceFailure,
     FinalResult,
     Proposal,
     Revision,
@@ -28,6 +29,7 @@ class DeliberationState(TypedDict, total=False):
     proposals: dict[str, Proposal]
     challenges: list[Challenge]
     evidence: list[Evidence]
+    evidence_failures: list[EvidenceFailure]
     revisions: list[Revision]
     agent_failures: list[AgentFailure]
     round: int
@@ -176,6 +178,7 @@ class _Runtime:
             "proposals": proposals,
             "challenges": [],
             "evidence": [],
+            "evidence_failures": [],
             "revisions": [],
             "agent_failures": failures,
             "round": 0,
@@ -247,21 +250,38 @@ class _Runtime:
         remaining = max(0, self.config.max_tool_calls - state.get("tool_calls", 0))
         current = current[:remaining]
 
-        async def run(challenge: Challenge) -> Evidence:
-            with debate_span(
-                "debate.evidence.retrieve",
-                **{
-                    "debate.round": round_number,
-                    "debate.challenge.id": challenge.id,
-                    "debate.challenge.target": challenge.target_claim_id,
-                },
-            ):
-                return await self.evidence_provider.gather(state["question"], challenge)
+        async def run(
+            challenge: Challenge,
+        ) -> tuple[Evidence | None, EvidenceFailure | None]:
+            try:
+                with debate_span(
+                    "debate.evidence.retrieve",
+                    **{
+                        "debate.round": round_number,
+                        "debate.challenge.id": challenge.id,
+                        "debate.challenge.target": challenge.target_claim_id,
+                    },
+                ):
+                    evidence = await self.evidence_provider.gather(
+                        state["question"], challenge
+                    )
+                return evidence, None
+            except Exception as exc:
+                return None, EvidenceFailure(
+                    challenge_id=challenge.id,
+                    round=round_number,
+                    provider=type(self.evidence_provider).__name__,
+                    error_type=type(exc).__name__,
+                    message=str(exc),
+                )
 
-        new_evidence = await asyncio.gather(*(run(challenge) for challenge in current))
+        results = await asyncio.gather(*(run(challenge) for challenge in current))
+        new_evidence = [evidence for evidence, _ in results if evidence is not None]
+        failures = [failure for _, failure in results if failure is not None]
         return {
-            "evidence": state.get("evidence", []) + list(new_evidence),
-            "tool_calls": state.get("tool_calls", 0) + len(new_evidence),
+            "evidence": state.get("evidence", []) + new_evidence,
+            "evidence_failures": state.get("evidence_failures", []) + failures,
+            "tool_calls": state.get("tool_calls", 0) + len(current),
         }
 
     async def revise(self, state: DeliberationState) -> dict:
@@ -445,6 +465,7 @@ class _Runtime:
             evidence=state.get("evidence", []),
             revisions=state.get("revisions", []),
             agent_failures=state.get("agent_failures", []),
+            evidence_failures=state.get("evidence_failures", []),
         )
         return {"final_result": final}
 
