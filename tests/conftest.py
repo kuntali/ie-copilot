@@ -145,3 +145,30 @@ class HighQualityEvidenceProvider:
             quality=0.95,
             supports_target_claim=False,
         )
+
+
+class SelectiveFailingEvidenceProvider:
+    def __init__(self, fail_for_challenger: str) -> None:
+        self.fail_for_challenger = fail_for_challenger
+        self.calls = 0
+
+    async def gather(self, question: str, challenge: Challenge) -> Evidence:
+        self.calls += 1
+        if challenge.challenger_agent_id == self.fail_for_challenger:
+            raise RuntimeError(f"evidence failed for {challenge.id}")
+        return Evidence(
+            challenge_id=challenge.id,
+            source="test-source",
+            content="verified sibling evidence",
+            quality=0.95,
+            supports_target_claim=False,
+        )
+
+
+class FailingEvidenceProvider:
+    def __init__(self) -> None:
+        self.calls = 0
+
+    async def gather(self, question: str, challenge: Challenge) -> Evidence:
+        self.calls += 1
+        raise RuntimeError(f"evidence failed for {challenge.id}")
