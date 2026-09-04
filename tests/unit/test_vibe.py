@@ -45,9 +45,8 @@ def test_cli_supports_legacy_ask_and_vibe_modes() -> None:
     assert vibe.files == ["src/a.py"]
 
 
-def test_workspace_provider_reads_explicit_files_and_returns_matching_snippet(
-    tmp_path: Path,
-) -> None:
+@pytest.mark.asyncio
+async def test_workspace_provider_returns_matching_snippet(tmp_path: Path) -> None:
     source = tmp_path / "service.py"
     source.write_text("def retry_request():\n    return 'retry budget'\n", encoding="utf-8")
     docs = load_workspace_files([str(source)], root=tmp_path)
@@ -63,7 +62,7 @@ def test_workspace_provider_reads_explicit_files_and_returns_matching_snippet(
         severity=Severity.HIGH,
     )
 
-    evidence = pytest.run(async_fn=provider.gather("q", challenge))
+    evidence = await provider.gather("q", challenge)
 
     assert evidence.source.endswith("service.py")
     assert "retry budget" in evidence.content
@@ -71,7 +70,10 @@ def test_workspace_provider_reads_explicit_files_and_returns_matching_snippet(
 
 
 def test_extract_unified_diff_from_fenced_answer() -> None:
-    answer = """Plan\n```diff\ndiff --git a/a.py b/a.py\n--- a/a.py\n+++ b/a.py\n@@\n-old\n+new\n```\nTests"""
+    answer = (
+        "Plan\n```diff\ndiff --git a/a.py b/a.py\n--- a/a.py\n+++ b/a.py\n"
+        "@@\n-old\n+new\n```\nTests"
+    )
     patch = extract_unified_diff(answer)
     assert patch.startswith("diff --git")
     assert "+new" in patch
