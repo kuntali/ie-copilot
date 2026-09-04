@@ -107,6 +107,31 @@ class SlowSolveAgent(ScriptedAgent):
         return await super().solve(question)
 
 
+@dataclass
+class FailingCritiqueAgent(ScriptedAgent):
+    async def critique(
+        self,
+        question: str,
+        own_proposal: Proposal,
+        other_proposals: Sequence[Proposal],
+        round_number: int,
+    ) -> list[ChallengeDraft]:
+        raise RuntimeError(f"critique failed for {self.agent_id}")
+
+
+@dataclass
+class FailingReviseAgent(ScriptedAgent):
+    async def revise(
+        self,
+        question: str,
+        proposal: Proposal,
+        challenges: Sequence[Challenge],
+        evidence: Sequence[Evidence],
+        round_number: int,
+    ) -> RevisionDecision:
+        raise RuntimeError(f"revise failed for {self.agent_id}")
+
+
 class HighQualityEvidenceProvider:
     def __init__(self) -> None:
         self.calls = 0
