@@ -3,6 +3,9 @@ from __future__ import annotations
 import asyncio
 from collections.abc import Sequence
 from dataclasses import dataclass, field
+from pathlib import Path
+
+import pytest
 
 from ie_copilot.models import (
     Challenge,
@@ -13,6 +16,15 @@ from ie_copilot.models import (
     RevisionDecision,
     Severity,
 )
+
+
+def pytest_collection_modifyitems(items: list[pytest.Item]) -> None:
+    for item in items:
+        parts = Path(str(item.path)).parts
+        for test_kind in ("unit", "integration", "e2e"):
+            if test_kind in parts:
+                item.add_marker(getattr(pytest.mark, test_kind))
+                break
 
 
 @dataclass
