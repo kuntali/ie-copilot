@@ -118,6 +118,23 @@ class MalformedStructuredOutputAgent(ScriptedAgent):
 
 
 @dataclass
+class DuplicateClaimsOutputAgent(ScriptedAgent):
+    async def solve(self, question: str) -> Proposal:
+        return Proposal.model_validate(
+            {
+                "agent_id": self.agent_id,
+                "position": self.initial_position,
+                "claims": [
+                    {"statement": "Same claim", "confidence": 0.8},
+                    {"statement": " same   CLAIM ", "confidence": 0.7},
+                ],
+                "final_answer": f"answer:{self.initial_position}",
+                "confidence": 0.8,
+            }
+        )
+
+
+@dataclass
 class SlowSolveAgent(ScriptedAgent):
     delay_seconds: float = 0.1
 
