@@ -5,7 +5,36 @@ on:
     branches: [main, "feat/**"]
   pull_request:
 
+permissions:
+  contents: write
+
 jobs:
+  rufffix:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/feat/multi-agent-deliberation-mvp'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+      - name: Install uv
+        run: python -m pip install --upgrade uv
+      - name: Install dependencies
+        run: uv sync --frozen --extra dev --python 3.10
+      - name: Apply Ruff import fix to CLI only
+        run: uv run --python 3.10 ruff check src/ie_copilot/cli.py --fix
+      - name: Commit Ruff fix
+        run: |
+          if git diff --quiet -- src/ie_copilot/cli.py; then
+            echo "No CLI Ruff fix needed"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/ie_copilot/cli.py
+          git commit -m "style: apply Ruff import fix to CLI"
+          git push
+
   test:
     runs-on: ubuntu-latest
     strategy:
