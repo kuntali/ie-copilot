@@ -2,7 +2,7 @@
 
 **Purpose:** single operational source of truth for task execution state.  
 **Workflow:** Superpowers. See `AGENTS.md`.  
-**Last updated:** 2026-09-04 17:34 +08:00
+**Last updated:** 2026-09-04 17:40 +08:00
 
 ## Status legend
 
@@ -17,7 +17,7 @@
 ## Current focus
 
 **Current phase:** Phase 1 — 建立可信工程基线  
-**Active task:** `P1-11`  
+**Active task:** `P1-12`  
 **Parallel execution:** disabled unless an implementation plan explicitly marks tasks independent.
 
 ## Phase 0 — 架构基线与 MVP 骨架
@@ -50,8 +50,8 @@
 | P1-08 | 补 EvidenceProvider failure 测试 | DONE | 2026-09-04 17:15 +08:00 | Design/plan: `docs/plans/2026-09-04-P1-08-evidence-provider-failure-{design,plan}.md`. RED run #117 (`33857098240`) failed 2 new tests because provider exceptions propagated through `asyncio.gather` while 13 existing tests passed. Implemented `EvidenceFailure`, per-request isolation, successful sibling preservation and attempted-call budget accounting. GREEN run #121 (`33857287893`) passed Ruff + Tests on Python 3.10/3.13; task diff limited to `graph.py` and `models.py`. |
 | P1-09 | 补 structured-output parse failure 测试 | DONE | 2026-09-04 17:29 +08:00 | Design/plan: `docs/plans/2026-09-04-P1-09-structured-output-failure-{design,plan}.md`. RED run #131 (`33858336168`) produced exactly 3 failures because `AgentFailure.failure_kind` was absent; malformed Pydantic output was already isolated as a `ValidationError`. Added backward-compatible `failure_kind` and exception-chain classification for timeout, Pydantic `ValidationError`, and LangChain `OutputParserException`. GREEN run #135 (`33858498339`) passed Ruff + Tests on Python 3.10/3.13; review confirmed no retry/provider/prompt-routing expansion. |
 | P1-10 | 补空/重复 Claim 测试 | DONE | 2026-09-04 17:34 +08:00 | Design/plan: `docs/plans/2026-09-04-P1-10-claim-validity-{design,plan}.md`. RED run #147 (`33858783886`) showed 7 failures/16 passes because blank statements, empty claim lists and canonical duplicates were accepted. Added deterministic schema validators only: blank Claim rejected, Proposal/RevisionDecision require >=1 claim, canonical duplicate claims rejected without rewriting legal text. GREEN run #149 (`33858860698`) passed Ruff + Tests on Python 3.10/3.13; review confirmed no silent dedupe or semantic-normalization expansion. |
-| P1-11 | 补并发 Agent 结果隔离测试 | IN_PROGRESS | 2026-09-04 17:34 +08:00 | Start with concurrency/identity-isolation semantics design; verify out-of-order completion cannot cross-wire proposals and an Agent cannot spoof another Agent's proposal identity. |
-| P1-12 | 分离 unit / integration / e2e 测试标签 | TODO | 2026-09-04 | External service tests must not contaminate unit suite |
+| P1-11 | 补并发 Agent 结果隔离测试 | DONE | 2026-09-04 17:40 +08:00 | Design/plan: `docs/plans/2026-09-04-P1-11-concurrency-isolation-{design,plan}.md`. RED run #159 (`33859157001`) produced exactly 1 failure/24 passes: out-of-order completion mapping passed, while spoofing Agent `c` overwrote proposal `a` content. Added only a solve-time identity guard requiring returned `proposal.agent_id == invoked agent.agent_id`, reusing existing runtime failure/quorum degradation. GREEN run #161 (`33859318641`) passed Ruff + Tests on Python 3.10/3.13; review shows production diff is 5 lines in `graph.py`, no locks/gather/consensus changes. |
+| P1-12 | 分离 unit / integration / e2e 测试标签 | IN_PROGRESS | 2026-09-04 17:40 +08:00 | Define explicit pytest taxonomy and CI commands so default unit suite cannot accidentally invoke external model/Phoenix/network services. |
 | P1-GATE | Phase 1 gate: CI triggered + Ruff pass + unit pass + Python 3.10 pass | TODO | 2026-09-04 | Cannot start Phase 2 until gate is DONE |
 
 ## Later phases
