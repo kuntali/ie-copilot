@@ -8,6 +8,18 @@ The architecture baseline is `docs/design/multi-agent-deliberation-system-design
 The phased roadmap is `docs/EXECUTION_PLAN.md`.
 The live task state is `docs/TASKS.md` and is the operational source of truth for current work.
 
+### Instruction precedence
+
+When repository documents overlap, interpret them by responsibility:
+
+1. `AGENTS.md` is authoritative for **development process and execution discipline**.
+2. `docs/TASKS.md` is authoritative for **current/next task state and completion evidence**.
+3. `docs/EXECUTION_PLAN.md` is authoritative for **phase sequencing, gates, and roadmap**.
+4. `docs/design/multi-agent-deliberation-system-design-v1.0.md` is authoritative for **system architecture and design rationale**.
+5. task-specific `docs/plans/*.md` files are authoritative for **approved implementation steps within their task**, but may not override the documents above without explicitly updating them.
+
+If an older section of a roadmap says to update progress somewhere other than `docs/TASKS.md`, the live task board rule wins.
+
 ## Mandatory Superpowers workflow
 
 Before changing production code, use the relevant Superpowers workflow/skill when it is available in the execution environment.
