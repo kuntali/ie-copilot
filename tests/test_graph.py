@@ -7,6 +7,7 @@ from conftest import (
     FailingReviseAgent,
     FailingSolveAgent,
     HighQualityEvidenceProvider,
+    MalformedStructuredOutputAgent,
     ScriptedAgent,
     SelectiveFailingEvidenceProvider,
     SlowSolveAgent,
@@ -191,6 +192,29 @@ async def test_one_solve_failure_degrades_to_remaining_agents_and_is_recorded() 
     assert failure.phase == "solve"
     assert failure.timed_out is False
     assert failure.error_type == "RuntimeError"
+    assert failure.failure_kind == "runtime"
+
+
+@pytest.mark.asyncio
+async def test_structured_output_failure_is_classified_and_degraded() -> None:
+    agents = [
+        ScriptedAgent("a", "X"),
+        ScriptedAgent("b", "X"),
+        MalformedStructuredOutputAgent("c", "Y"),
+    ]
+    graph = build_deliberation_graph(agents, NullEvidenceProvider())
+
+    state = await graph.ainvoke({"question": "q"})
+    result = state["final_result"]
+
+    assert set(result.proposals) == {"a", "b"}
+    assert result.consensus.reached is True
+    assert len(result.agent_failures) == 1
+    failure = result.agent_failures[0]
+    assert failure.agent_id == "c"
+    assert failure.phase == "solve"
+    assert failure.error_type == "ValidationError"
+    assert failure.failure_kind == "structured_output"
 
 
 @pytest.mark.asyncio
@@ -217,6 +241,7 @@ async def test_one_solve_timeout_degrades_and_records_timeout() -> None:
     assert failure.phase == "solve"
     assert failure.timed_out is True
     assert failure.error_type == "TimeoutError"
+    assert failure.failure_kind == "timeout"
 
 
 @pytest.mark.asyncio
