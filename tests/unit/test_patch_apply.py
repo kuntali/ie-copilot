@@ -20,7 +20,10 @@ def test_patch_path_validation_rejects_parent_traversal() -> None:
         validate_unified_diff_paths(patch)
 
 
-def test_apply_unified_diff_checks_before_apply(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+def test_apply_unified_diff_checks_before_apply(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
     calls: list[list[str]] = []
 
     def fake_run(command, **kwargs):
