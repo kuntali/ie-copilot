@@ -1,7 +1,12 @@
 from __future__ import annotations
 
 import pytest
-from conftest import HighQualityEvidenceProvider, ScriptedAgent
+from conftest import (
+    FailingSolveAgent,
+    HighQualityEvidenceProvider,
+    ScriptedAgent,
+    SlowSolveAgent,
+)
 
 from ie_copilot.evidence import NullEvidenceProvider
 from ie_copilot.graph import DeliberationConfig, build_deliberation_graph
@@ -160,3 +165,64 @@ async def test_max_tool_calls_caps_same_round_evidence_requests() -> None:
     assert result.rounds == 1
     assert evidence.calls == 1
     assert len(result.evidence) == 1
+
+
+@pytest.mark.asyncio
+async def test_one_solve_failure_degrades_to_remaining_agents_and_is_recorded() -> None:
+    agents = [
+        ScriptedAgent("a", "X"),
+        ScriptedAgent("b", "X"),
+        FailingSolveAgent("c", "Y"),
+    ]
+    graph = build_deliberation_graph(agents, NullEvidenceProvider())
+
+    state = await graph.ainvoke({"question": "q"})
+    result = state["final_result"]
+
+    assert set(result.proposals) == {"a", "b"}
+    assert result.consensus.reached is True
+    assert len(result.agent_failures) == 1
+    failure = result.agent_failures[0]
+    assert failure.agent_id == "c"
+    assert failure.phase == "solve"
+    assert failure.timed_out is False
+    assert failure.error_type == "RuntimeError"
+
+
+@pytest.mark.asyncio
+async def test_one_solve_timeout_degrades_and_records_timeout() -> None:
+    agents = [
+        ScriptedAgent("a", "X"),
+        ScriptedAgent("b", "X"),
+        SlowSolveAgent("c", "Y", delay_seconds=0.05),
+    ]
+    graph = build_deliberation_graph(
+        agents,
+        NullEvidenceProvider(),
+        DeliberationConfig(agent_timeout_seconds=0.001),
+    )
+
+    state = await graph.ainvoke({"question": "q"})
+    result = state["final_result"]
+
+    assert set(result.proposals) == {"a", "b"}
+    assert result.consensus.reached is True
+    assert len(result.agent_failures) == 1
+    failure = result.agent_failures[0]
+    assert failure.agent_id == "c"
+    assert failure.phase == "solve"
+    assert failure.timed_out is True
+    assert failure.error_type == "TimeoutError"
+
+
+@pytest.mark.asyncio
+async def test_initial_solve_requires_two_successful_agents() -> None:
+    agents = [
+        ScriptedAgent("a", "X"),
+        FailingSolveAgent("b", "X"),
+        FailingSolveAgent("c", "Y"),
+    ]
+    graph = build_deliberation_graph(agents, NullEvidenceProvider())
+
+    with pytest.raises(RuntimeError, match="at least two agents must complete initial solve"):
+        await graph.ainvoke({"question": "q"})
