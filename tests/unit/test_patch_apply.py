@@ -28,7 +28,7 @@ def test_apply_unified_diff_checks_before_apply(
 
     def fake_run(command, **kwargs):
         calls.append(command)
-        return SimpleNamespace(returncode=0, stdout="", stderr="")
+        return SimpleNamespace(returncode=0, stdout=b"", stderr=b"")
 
     monkeypatch.setattr("ie_copilot.workspace.subprocess.run", fake_run)
     patch = """diff --git a/a.py b/a.py
