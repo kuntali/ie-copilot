@@ -2,7 +2,7 @@
 
 **Purpose:** single operational source of truth for task execution state.  
 **Workflow:** Superpowers. See `AGENTS.md`.  
-**Last updated:** 2026-09-04 16:16 +08:00
+**Last updated:** 2026-09-04 16:19 +08:00
 
 ## Status legend
 
@@ -17,7 +17,7 @@
 ## Current focus
 
 **Current phase:** Phase 1 — 建立可信工程基线  
-**Active task:** `P1-02`  
+**Active task:** `P1-03`  
 **Parallel execution:** disabled unless an implementation plan explicitly marks tasks independent.
 
 ## Phase 0 — 架构基线与 MVP 骨架
@@ -41,8 +41,8 @@
 | ID | Task | Status | Updated | Evidence / Notes |
 |---|---|---|---|---|
 | P1-01 | 系统化调查 GitHub Actions 未产生 workflow run 的根因 | DONE | 2026-09-04 16:16 +08:00 | Root cause: premature observation of asynchronous Actions run creation/indexing, not workflow configuration. PR head `0cc56fb...` returned no run immediately after PR creation but now resolves to CI run #15 (`33851330838`, completed/failure). Workflow exists at correct path and matches `pull_request`; no speculative YAML fix made. |
-| P1-02 | 修复 CI 触发问题并验证 workflow run 实际产生 | IN_PROGRESS | 2026-09-04 16:16 +08:00 | No trigger-code fix appears necessary; verify current head has an actual run and record run/check evidence. |
-| P1-03 | 固化 `uv.lock` 与可重复依赖安装 | TODO | 2026-09-04 | Verify Python 3.10 baseline |
+| P1-02 | 修复 CI 触发问题并验证 workflow run 实际产生 | DONE | 2026-09-04 16:19 +08:00 | No trigger fix required. CI run #43 (`33853451291`) executed matrix jobs; Python 3.10 and 3.13 both reached dependency installation successfully. Failure is at Ruff, proving workflow trigger/runner/dependency-install path works. |
+| P1-03 | 固化 `uv.lock` 与可重复依赖安装 | IN_PROGRESS | 2026-09-04 16:19 +08:00 | Start with Superpowers writing-plan; establish lockfile and frozen-install verification before lint/test fixes. |
 | P1-04 | Ruff 全绿 | TODO | 2026-09-04 | `ruff check .` evidence required |
 | P1-05 | Unit pytest 全绿且不依赖外部 API | TODO | 2026-09-04 | Python 3.10 required; 3.13 compatibility preferred |
 | P1-06 | 补 max_rounds / max_tool_calls 终止测试 | TODO | 2026-09-04 | TDD required |
