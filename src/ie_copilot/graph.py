@@ -6,7 +6,9 @@ from collections.abc import Awaitable
 from dataclasses import dataclass
 from typing import Literal, TypedDict, TypeVar
 
+from langchain_core.exceptions import OutputParserException
 from langgraph.graph import END, START, StateGraph
+from pydantic import ValidationError
 
 from .models import (
     AgentFailure,
@@ -124,6 +126,26 @@ class _Runtime:
             return await awaitable
         return await asyncio.wait_for(awaitable, timeout=timeout)
 
+    @staticmethod
+    def _failure_kind(
+        exc: Exception,
+    ) -> Literal["runtime", "timeout", "structured_output"]:
+        chain: list[BaseException] = []
+        current: BaseException | None = exc
+        seen: set[int] = set()
+        while current is not None and id(current) not in seen:
+            seen.add(id(current))
+            chain.append(current)
+            current = current.__cause__ or current.__context__
+
+        if any(isinstance(item, asyncio.TimeoutError) for item in chain):
+            return "timeout"
+        if any(
+            isinstance(item, (ValidationError, OutputParserException)) for item in chain
+        ):
+            return "structured_output"
+        return "runtime"
+
     def _agent_failure(
         self,
         *,
@@ -132,7 +154,8 @@ class _Runtime:
         round_number: int,
         exc: Exception,
     ) -> AgentFailure:
-        timed_out = isinstance(exc, asyncio.TimeoutError)
+        failure_kind = self._failure_kind(exc)
+        timed_out = failure_kind == "timeout"
         message = str(exc)
         if timed_out and not message:
             message = f"{phase} timed out after {self.config.agent_timeout_seconds} seconds"
@@ -140,9 +163,10 @@ class _Runtime:
             agent_id=agent_id,
             phase=phase,
             round=round_number,
-            error_type="TimeoutError" if timed_out else type(exc).__name__,
+            error_type=type(exc).__name__,
             message=message,
             timed_out=timed_out,
+            failure_kind=failure_kind,
         )
 
     async def solve(self, state: DeliberationState) -> dict:
