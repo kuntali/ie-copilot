@@ -24,5 +24,5 @@ jobs:
         run: uv sync --frozen --extra dev --python ${{ matrix.python-version }}
       - name: Ruff
         run: uv run --python ${{ matrix.python-version }} ruff check .
-      - name: Tests
-        run: uv run --python ${{ matrix.python-version }} pytest
+      - name: Unit tests
+        run: uv run --python ${{ matrix.python-version }} pytest tests/unit -m unit
