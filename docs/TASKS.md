@@ -40,7 +40,7 @@
 
 | ID | Task | Status | Updated | Evidence / Notes |
 |---|---|---|---|---|
-| P1-01 | 系统化调查 GitHub Actions 未产生 workflow run 的根因 | TODO | 2026-09-04 | Must use systematic-debugging; no speculative fix before root cause |
+| P1-01 | 系统化调查 GitHub Actions 未产生 workflow run 的根因 | TODO | 2026-09-04 | Plan: `docs/plans/2026-09-04-P1-01-ci-root-cause-plan.md`; use systematic-debugging; no speculative fix before root cause |
 | P1-02 | 修复 CI 触发问题并验证 workflow run 实际产生 | TODO | 2026-09-04 | Depends on P1-01 |
 | P1-03 | 固化 `uv.lock` 与可重复依赖安装 | TODO | 2026-09-04 | Verify Python 3.10 baseline |
 | P1-04 | Ruff 全绿 | TODO | 2026-09-04 | `ruff check .` evidence required |
