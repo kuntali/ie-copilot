@@ -2,11 +2,11 @@ from __future__ import annotations
 
 import pytest
 from conftest import HighQualityEvidenceProvider, ScriptedAgent
+from ie_copilot.replay import replay_signature
 
 from ie_copilot.evidence import NullEvidenceProvider
 from ie_copilot.graph import DeliberationConfig, build_deliberation_graph
 from ie_copilot.models import EvidenceRelation, RevisionAction, Severity
-from ie_copilot.replay import replay_signature
 
 
 @pytest.mark.asyncio
@@ -58,7 +58,11 @@ async def test_evidence_is_bound_to_target_claim_with_relation() -> None:
 
 @pytest.mark.asyncio
 async def test_revision_has_explicit_action_and_causal_provenance() -> None:
-    agents = [ScriptedAgent("a", "X"), ScriptedAgent("b", "X"), ScriptedAgent("c", "Y", revised_position="X")]
+    agents = [
+        ScriptedAgent("a", "X"),
+        ScriptedAgent("b", "X"),
+        ScriptedAgent("c", "Y", revised_position="X"),
+    ]
     graph = build_deliberation_graph(agents, NullEvidenceProvider())
     state = await graph.ainvoke({"question": "q"})
     revision = next(r for r in state["revisions"] if r.agent_id == "c")
@@ -73,10 +77,18 @@ async def test_revision_has_explicit_action_and_causal_provenance() -> None:
 @pytest.mark.asyncio
 async def test_round_snapshots_make_semantic_replay_deterministic() -> None:
     def agents() -> list[ScriptedAgent]:
-        return [ScriptedAgent("a", "X"), ScriptedAgent("b", "X"), ScriptedAgent("c", "Y", revised_position="X")]
+        return [
+            ScriptedAgent("a", "X"),
+            ScriptedAgent("b", "X"),
+            ScriptedAgent("c", "Y", revised_position="X"),
+        ]
 
-    graph1 = build_deliberation_graph(agents(), NullEvidenceProvider(), DeliberationConfig(max_rounds=2))
-    graph2 = build_deliberation_graph(agents(), NullEvidenceProvider(), DeliberationConfig(max_rounds=2))
+    graph1 = build_deliberation_graph(
+        agents(), NullEvidenceProvider(), DeliberationConfig(max_rounds=2)
+    )
+    graph2 = build_deliberation_graph(
+        agents(), NullEvidenceProvider(), DeliberationConfig(max_rounds=2)
+    )
     state1 = await graph1.ainvoke({"question": "q"})
     state2 = await graph2.ainvoke({"question": "q"})
 
