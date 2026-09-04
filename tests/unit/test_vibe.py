@@ -38,11 +38,13 @@ def test_cli_supports_legacy_ask_and_vibe_modes() -> None:
     legacy = parse_cli_args(["why postgres?"])
     ask = parse_cli_args(["ask", "why postgres?"])
     vibe = parse_cli_args(["vibe", "fix bug", "--file", "src/a.py"])
+    vibe_apply = parse_cli_args(["vibe", "fix bug", "--file", "src", "--apply"])
 
     assert legacy.command == "ask"
     assert ask.command == "ask"
     assert vibe.command == "vibe"
     assert vibe.files == ["src/a.py"]
+    assert vibe_apply.apply_patch is True
 
 
 @pytest.mark.asyncio
