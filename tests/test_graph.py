@@ -1,12 +1,11 @@
 from __future__ import annotations
 
 import pytest
+from conftest import HighQualityEvidenceProvider, ScriptedAgent
 
 from ie_copilot.evidence import NullEvidenceProvider
 from ie_copilot.graph import DeliberationConfig, build_deliberation_graph
 from ie_copilot.models import Severity
-
-from conftest import HighQualityEvidenceProvider, ScriptedAgent
 
 
 @pytest.mark.asyncio
