@@ -13,6 +13,7 @@ from .graph import DeliberationConfig, build_deliberation_graph
 from .observability import configure_phoenix
 from .workspace import (
     WorkspaceEvidenceProvider,
+    apply_unified_diff,
     build_vibe_question,
     extract_unified_diff,
     load_workspace_files,
@@ -45,12 +46,18 @@ def _build_parser() -> argparse.ArgumentParser:
         action="append",
         default=[],
         dest="files",
-        help="workspace file to include; repeat for multiple files",
+        help="workspace file or directory to include; repeat for multiple inputs",
     )
     vibe.add_argument("--root", default=".", help="workspace root used to constrain file access")
     vibe.add_argument(
         "--patch-out",
-        help="write the final fenced unified diff to this path; does not apply the patch",
+        help="write the final fenced unified diff to this path without applying it",
+    )
+    vibe.add_argument(
+        "--apply",
+        action="store_true",
+        dest="apply_patch",
+        help="validate with git apply --check, then apply the final unified diff",
     )
     _add_runtime_budget_args(vibe)
     return parser
@@ -124,15 +131,23 @@ async def _run(args: argparse.Namespace) -> int:
             file=sys.stderr,
         )
 
-    if mode == "vibe" and args.patch_out:
+    if mode == "vibe" and (args.patch_out or args.apply_patch):
         patch = extract_unified_diff(result.answer)
         if not patch:
             print("final answer does not contain a unified diff", file=sys.stderr)
             return 3
-        patch_path = Path(args.patch_out)
-        patch_path.parent.mkdir(parents=True, exist_ok=True)
-        patch_path.write_text(patch + "\n", encoding="utf-8")
-        print(f"patch written to {patch_path}", file=sys.stderr)
+        if args.patch_out:
+            patch_path = Path(args.patch_out)
+            patch_path.parent.mkdir(parents=True, exist_ok=True)
+            patch_path.write_text(patch + "\n", encoding="utf-8")
+            print(f"patch written to {patch_path}", file=sys.stderr)
+        if args.apply_patch:
+            try:
+                apply_unified_diff(patch, root=args.root)
+            except (OSError, RuntimeError, ValueError) as exc:
+                print(f"patch not applied: {exc}", file=sys.stderr)
+                return 4
+            print("patch applied successfully", file=sys.stderr)
     return 0
 
 
