@@ -39,17 +39,12 @@ tests/test_concurrency_isolation.py -> tests/unit/test_concurrency_isolation.py
 创建：
 
 ```text
-tests/integration/.gitkeep
-tests/e2e/.gitkeep
+tests/unit/README.md
+tests/integration/README.md
+tests/e2e/README.md
 ```
 
 ## Task 3 — Marker separation
-
-在每个现有 unit test module 添加：
-
-```python
-pytestmark = pytest.mark.unit
-```
 
 `pyproject.toml` 注册：
 
@@ -58,6 +53,16 @@ pytestmark = pytest.mark.unit
 - e2e
 
 并开启 `--strict-markers`。
+
+根 `tests/conftest.py` 使用 `pytest_collection_modifyitems` 根据测试路径自动增加对应 marker。采用根 hook 而非子目录 conftest，是因为现有 tests 直接从 `conftest` 导入 deterministic test doubles；子目录同名 conftest 会产生 Python module shadowing。
+
+映射：
+
+```text
+tests/unit/**        -> unit
+tests/integration/** -> integration
+tests/e2e/**         -> e2e
+```
 
 ## Task 4 — Default test policy
 
@@ -91,8 +96,9 @@ Fresh CI 必须满足 Python 3.10 / 3.13：
 
 - 普通 CI 没有 integration/e2e command；
 - integration/e2e 目录不会被 default `testpaths` 收集；
-- shared conftest 无 collection-time network side effects；
-- 所有当前测试均有 unit marker。
+- shared root conftest 无 collection-time network side effects；
+- 所有当前测试都位于 unit 目录并自动获得 unit marker；
+- 不存在子目录 conftest shadowing。
 
 ## Completion gate
 
