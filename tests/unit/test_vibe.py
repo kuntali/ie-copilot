@@ -3,17 +3,17 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
+from langchain_core.exceptions import OutputParserException
+
+from ie_copilot.agents import LLMDebateAgent
+from ie_copilot.cli import parse_cli_args
 from ie_copilot.config import RuntimeSettings
+from ie_copilot.models import Challenge, Severity
 from ie_copilot.workspace import (
     WorkspaceEvidenceProvider,
     extract_unified_diff,
     load_workspace_files,
 )
-from langchain_core.exceptions import OutputParserException
-
-from ie_copilot.agents import LLMDebateAgent
-from ie_copilot.cli import parse_cli_args
-from ie_copilot.models import Challenge, Severity
 
 
 def test_runtime_settings_parse_environment() -> None:
