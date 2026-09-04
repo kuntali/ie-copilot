@@ -1,7 +1,7 @@
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass, field
-from typing import Sequence
 
 from ie_copilot.models import (
     Challenge,
@@ -31,7 +31,12 @@ class ScriptedAgent:
         proposal = Proposal(
             agent_id=self.agent_id,
             position=self.initial_position,
-            claims=[Claim(statement=f"{self.agent_id} supports {self.initial_position}", confidence=0.8)],
+            claims=[
+                Claim(
+                    statement=f"{self.agent_id} supports {self.initial_position}",
+                    confidence=0.8,
+                )
+            ],
             final_answer=f"answer:{self.initial_position}",
             confidence=0.8,
         )
